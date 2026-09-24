@@ -62,6 +62,8 @@ function Vault() {
       { address: d.usdg, abi: usdgAbi, functionName: "allowance", args: [me, d.vault] },
       { address: d.usdg, abi: usdgAbi, functionName: "balanceOf", args: [me] },
       { ...V, functionName: "maxDeviationBps" },
+      { ...V, functionName: "depositCap" },
+      { ...V, functionName: "maxDeposit", args: [me] },
     ],
     query: { refetchInterval: 4_000 },
   });
@@ -80,8 +82,13 @@ function Vault() {
   const allowance = r<bigint>(10) ?? 0n;
   const walletUsdg = r<bigint>(11);
   const maxDevBps = r<bigint>(12);
+  const depositCap = r<bigint>(13);
+  const capRoom = r<bigint>(14);
+  const capped = depositCap !== undefined && depositCap < 2n ** 255n;
+
 
   const amount = safeParse(amt, 6);
+  const overCap = tab === "deposit" && capped && capRoom !== undefined && amount > capRoom;
   const { data: extra } = useReadContracts({
     contracts: [
       { ...V, functionName: "convertToAssets", args: [myShares] },
@@ -144,7 +151,12 @@ function Vault() {
           <p className="font-mono text-[10.5px] text-muted-foreground">USDG · 6 dec</p>
         </div>
         <Stat className="p-5" label="Share price" value={fmtUsdg(sharePrice, 6)} unit="USDG per 1 vspNVDA" />
-        <Stat className="p-5" label="Shares outstanding" value={fmt18(supply, 2)} unit="vspNVDA · 18 dec" />
+        <Stat
+          className="p-5"
+          label={capped ? "Beta deposit cap" : "Shares outstanding"}
+          value={capped ? `${fmtUsdg(nav, 0)} / ${fmtUsdg(depositCap, 0)}` : fmt18(supply, 2)}
+          unit={capped ? "USDG NAV used / cap" : "vspNVDA · 18 dec"}
+        />
         <Stat className="p-5" label="NVDA mark" value={fmtUsd18(session.markPrice)} unit="USD · Chainlink → 18 dec" />
       </Card>
 
@@ -307,11 +319,12 @@ function Vault() {
               />
               <DetailRow k="Share price" v={`${fmtUsdg(sharePrice, 6)} USDG`} />
               {tab === "withdraw" && <DetailRow k="Free USDG in vault" v={`${fmtUsdg(usdgFree)} USDG`} />}
+              {tab === "deposit" && capped && <DetailRow k="Beta cap room" v={`${fmtUsdg(capRoom)} of ${fmtUsdg(depositCap, 0)} USDG`} />}
               <DetailRow
                 k="Status"
                 v={
-                  <span className={cn(lockReason || needsFlatten ? "text-destructive" : "text-up")}>
-                    {lockReason ? "Locked" : needsFlatten ? "Needs flatten first" : "Open"}
+                  <span className={cn(lockReason || needsFlatten || overCap ? "text-destructive" : "text-up")}>
+                    {lockReason ? "Locked" : needsFlatten ? "Needs flatten first" : overCap ? "Over the beta cap" : "Open"}
                   </span>
                 }
               />

@@ -50,3 +50,14 @@ export const activeChain: Chain = rpcOverride
   : base;
 
 export const isLocal = network === "local";
+
+export const isMainnet = network === "mainnet";
+
+/** Optional link to the separately hosted demo (used by the mainnet landing page). */
+export const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_URL || "";
+
+/** Block-explorer transaction link for the active chain, if it has an explorer. */
+export function txUrl(hash: string): string | undefined {
+  const base = activeChain.blockExplorers?.default.url;
+  return base ? `${base}/tx/${hash}` : undefined;
+}

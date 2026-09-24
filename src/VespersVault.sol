@@ -58,6 +58,8 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     uint256 public mgmtFeeBps; // reserved, 0 in Phase 1 (not charged)
     uint256 public maxDeviationBps = 50; // 0.50%: swap price vs oracle mark
     bool public allowInKind; // default false: force flatten first
+    /// @notice Guarded-launch cap on NAV after a deposit, in USDG (6 dec). type(uint256).max = uncapped.
+    uint256 public depositCap = type(uint256).max;
 
     uint256 public stockHeld; // raw 18-dec stock units owned by the vault
     uint256 public accruedFees; // USDG-6 owed to feeRecipient, excluded from NAV
@@ -76,6 +78,7 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     event ParamsSet(uint256 maxInventoryBps, uint256 perfFeeBps, uint256 maxDeviationBps, bool allowInKind);
     event SwapAdapterSet(address adapter);
     event FeeRecipientSet(address recipient);
+    event DepositCapSet(uint256 cap);
     event RedeemedInKind(
         address indexed owner, address indexed receiver, uint256 shares, uint256 usdgOut, uint256 stockOut
     );
@@ -126,6 +129,23 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     function usdgAvailable() public view returns (uint256) {
         uint256 bal = _usdg.balanceOf(address(this));
         return bal > accruedFees ? bal - accruedFees : 0;
+    }
+
+    /// @notice Remaining USDG that can be deposited before NAV reaches `depositCap`.
+    /// @dev ERC-4626 `deposit` reverts with ERC4626ExceededMaxDeposit above this. Session and
+    ///      freeze gating is enforced separately in `_deposit` with its own errors.
+    function maxDeposit(address) public view override returns (uint256) {
+        uint256 cap = depositCap;
+        if (cap == type(uint256).max) return type(uint256).max;
+        uint256 nav = totalAssets();
+        return nav >= cap ? 0 : cap - nav;
+    }
+
+    /// @notice Share-denominated form of `maxDeposit`, rounded down.
+    function maxMint(address receiver) public view override returns (uint256) {
+        uint256 maxAssets = maxDeposit(receiver);
+        if (maxAssets == type(uint256).max) return type(uint256).max;
+        return _convertToShares(maxAssets, Math.Rounding.Floor);
     }
 
     /// @inheritdoc ERC4626
@@ -395,6 +415,13 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     function setSwapAdapter(address adapter) external onlyOwner {
         swapAdapter = ISwapAdapter(adapter);
         emit SwapAdapterSet(adapter);
+    }
+
+    /// @notice Sets the guarded-launch NAV cap for deposits (USDG, 6 dec). type(uint256).max removes it.
+    /// @param cap New cap. Lowering it below current NAV only blocks new deposits; nobody is forced out.
+    function setDepositCap(uint256 cap) external onlyOwner {
+        depositCap = cap;
+        emit DepositCapSet(cap);
     }
 
     /// @notice Sets the performance fee recipient.

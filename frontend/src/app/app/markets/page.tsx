@@ -84,6 +84,7 @@ function Markets() {
       ) : ids.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">
           No markets yet.
+          {!isLocal && " New gap markets open after Friday's 16:00 New York close, once the official close is recorded."}
           {isLocal && (
             <>
               {" "}

@@ -1,4 +1,5 @@
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { txUrl } from "@/lib/chains";
 import type { TxState } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +18,14 @@ export function TxStatus({ state, className }: { state: TxState; className?: str
       <Icon className={cn("mt-px h-3.5 w-3.5 shrink-0", state.status === "done" && "text-up", (state.status === "signing" || state.status === "mining") && "animate-spin")} />
       <span>
         {state.message}
-        {state.hash && <span className="ml-2 font-mono opacity-60">{state.hash.slice(0, 10)}…</span>}
+        {state.hash &&
+          (txUrl(state.hash) ? (
+            <a href={txUrl(state.hash)} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-0.5 font-mono underline-offset-2 hover:underline">
+              {state.hash.slice(0, 10)}… <ArrowUpRight className="h-3 w-3" />
+            </a>
+          ) : (
+            <span className="ml-2 font-mono opacity-60">{state.hash.slice(0, 10)}…</span>
+          ))}
       </span>
     </p>
   );

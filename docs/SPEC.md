@@ -175,6 +175,8 @@ Both market kinds are parimutuel binaries on USDG. **Conservative interpretation
   - `sellInventory` (flatten): allowed in any session while the mark is unfrozen.
   - Both check the execution price against the oracle mark (`maxDeviationBps`, default and hard cap 50 bps = 0.5%) and
     the caller's `minOut`.
+- **Guarded launch:** `depositCap` (owner-set, default uncapped) limits NAV after a deposit.
+  ERC-4626 `maxDeposit`/`maxMint` report the remaining room. Withdrawals are never capped.
 - **Cycles:** `startCycle()` can be called by anyone during Vespers. `endCycle()` can be called
   by anyone once cash is open and the vault is flat.
   `realizedPnl = navEnd − navStart − netFlows` (deposits minus withdrawals inside the cycle).

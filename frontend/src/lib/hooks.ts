@@ -80,12 +80,17 @@ export type TxState = { status: "idle" | "signing" | "mining" | "done" | "error"
 export function useTx() {
   const { writeContractAsync } = useWriteContract();
   const client = usePublicClient();
+  const { address } = useAccount();
   const qc = useQueryClient();
   const [state, setState] = useState<TxState>({ status: "idle" });
 
   const send = useCallback(
     async (label: string, req: Parameters<typeof writeContractAsync>[0]): Promise<boolean> => {
       try {
+        // Simulate first: a call that would revert is explained here, and the wallet is never
+        // asked to sign (and spend gas on) a transaction that can't succeed.
+        setState({ status: "signing", message: `${label}: checking…` });
+        await client!.simulateContract({ ...(req as object), account: address } as Parameters<NonNullable<typeof client>["simulateContract"]>[0]);
         setState({ status: "signing", message: `${label}: confirm in wallet…` });
         const hash = await writeContractAsync(req);
         setState({ status: "mining", message: `${label}: waiting for block…`, hash });
@@ -99,7 +104,7 @@ export function useTx() {
         return false;
       }
     },
-    [writeContractAsync, client, qc],
+    [writeContractAsync, client, qc, address],
   );
 
   return { state, send, busy: state.status === "signing" || state.status === "mining" };

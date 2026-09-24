@@ -1,0 +1,17 @@
+{
+  "name": "amen-keeper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Amen Protocol keeper: records official closes, creates and resolves NVDA gap markets, keeps vault cycles.",
+  "scripts": {
+    "start": "node src/keeper.mjs",
+    "once": "node src/keeper.mjs --once"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "viem": "^2.56.8"
+  }
+}

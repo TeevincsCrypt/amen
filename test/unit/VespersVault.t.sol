@@ -8,6 +8,8 @@ import {AmenOracle} from "../../src/AmenOracle.sol";
 import {MockSwapAdapter} from "../../src/mocks/MockSwapAdapter.sol";
 import {Errors} from "../../src/libraries/Errors.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract VespersVaultTest is AmenTestBase {
     VespersVault vault;
@@ -288,6 +290,54 @@ contract VespersVaultTest is AmenTestBase {
         assertEq(u, 32e6);
         assertEq(s, 0.1e18);
         assertEq(nvda.balanceOf(alice), 0.1e18);
+    }
+
+    // ───────────── guarded-launch deposit cap ─────────────
+
+    function test_DepositCapDefaultsToUncapped() public view {
+        assertEq(vault.depositCap(), type(uint256).max);
+        assertEq(vault.maxDeposit(alice), type(uint256).max);
+        assertEq(vault.maxMint(alice), type(uint256).max);
+    }
+
+    function test_DepositCapEnforced() public {
+        vm.prank(owner);
+        vault.setDepositCap(150e6);
+        _deposit(alice, 100e6);
+        assertEq(vault.maxDeposit(bob), 50e6);
+        assertEq(vault.maxMint(bob), 50e18);
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC4626.ERC4626ExceededMaxDeposit.selector, bob, 50e6 + 1, 50e6)
+        );
+        vault.deposit(50e6 + 1, bob);
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC4626.ERC4626ExceededMaxMint.selector, bob, 50e18 + 1, 50e18)
+        );
+        vault.mint(50e18 + 1, bob);
+        _deposit(bob, 50e6); // exactly to the cap
+        assertEq(vault.totalAssets(), 150e6);
+        assertEq(vault.maxDeposit(bob), 0);
+    }
+
+    function test_DepositCapLoweredBelowNavBlocksOnlyNewDeposits() public {
+        _deposit(alice, 100e6);
+        vm.prank(owner);
+        vault.setDepositCap(10e6);
+        assertEq(vault.maxDeposit(bob), 0);
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(ERC4626.ERC4626ExceededMaxDeposit.selector, bob, 1e6, 0));
+        vault.deposit(1e6, bob);
+        vm.prank(alice);
+        vault.withdraw(100e6, alice, alice); // exits are never capped
+        assertEq(vault.totalAssets(), 0);
+    }
+
+    function test_RevertWhen_SetDepositCapNotOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
+        vault.setDepositCap(1);
     }
 
     // ───────────── reentrancy ─────────────

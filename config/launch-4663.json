@@ -1,0 +1,21 @@
+{
+  "_comment": "Guarded-beta launch settings for Robinhood Chain mainnet (4663). Addresses live in config/4663.json.",
+  "vaultDepositCapUsdg": 10000,
+  "maxNotionalPerMarketUsdg": 2000,
+  "takerFeeBps": 100,
+  "nyseHolidays": [
+    "2026-11-26",
+    "2026-12-25",
+    "2027-01-01",
+    "2027-01-18",
+    "2027-02-15",
+    "2027-03-26",
+    "2027-05-31",
+    "2027-06-18",
+    "2027-07-05",
+    "2027-09-06",
+    "2027-11-25",
+    "2027-12-24"
+  ],
+  "_holidaysNote": "NYSE full-day closures (observed dates). VERIFY against https://www.nyse.com/markets/hours-calendars before deploying. Add later years with oracle.setHoliday(dayIndex, true) from the Safe or the keeper."
+}

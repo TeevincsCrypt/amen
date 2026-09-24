@@ -29,6 +29,8 @@ const HUMAN: Record<string, string> = {
   NotFlat: "The vault must be flat (no NVDA) for this.",
   CycleActive: "A cycle is already active.",
   WrongChain: "Wrong chain. Amen runs only on Robinhood Chain.",
+  ERC4626ExceededMaxDeposit: "The vault's beta deposit cap is reached (or this would exceed it). Try a smaller amount.",
+  ERC4626ExceededMaxMint: "The vault's beta deposit cap is reached (or this would exceed it). Try a smaller amount.",
 };
 
 export function decodeError(e: unknown): string {

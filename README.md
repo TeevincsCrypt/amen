@@ -7,7 +7,7 @@ The after-hours venue for official Robinhood Stock Tokens, on **Robinhood Chain*
 
 > Not for US persons. Stock Tokens are debt securities and give no share ownership. Not advice. Unaudited MVP.
 
-Docs: [SPEC](docs/SPEC.md) · [RISKS](docs/RISKS.md) · [BUILDATHON](docs/BUILDATHON.md)
+Docs: [SPEC](docs/SPEC.md) · [RISKS](docs/RISKS.md) · [BUILDATHON](docs/BUILDATHON.md) · [LAUNCH (mainnet runbook)](docs/LAUNCH.md) · [VERIFY](docs/VERIFY.md)
 
 ## Layout
 ```
@@ -22,6 +22,7 @@ script/RecordClose.s.sol  record the official NVDA close
 script/local-demo.sh      one-command local demo (anvil 31337): full flow + summary, then rewinds for the UI
 test/unit, test/fork      Foundry tests; fork tests auto-skip unless chainid == 4663
 frontend/                 Next.js 14 · wagmi v2 · viem · Tailwind · shadcn-style UI
+keeper/                   keeper bot (records closes, creates/resolves/voids markets, vault cycle books)
 ```
 
 ## Contracts

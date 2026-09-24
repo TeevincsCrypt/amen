@@ -1,0 +1,46 @@
+# Amen keeper
+
+Runs Amen's routine, time-driven jobs every `INTERVAL_SEC` (30 s):
+
+1. **Record the official close** after the 16:00 New York bell: the last Chainlink round at or
+   before the bell, within 30 minutes. Uses `recordSessionCloseAtRound` if the feed already
+   ticked after the bell. If the last pre-bell round is older than 30 minutes, it only warns;
+   forcing a close is left to a human.
+2. **Create the NVDA gap market** for that close (`MARKET_SCHEDULE=weekend`: only when the next
+   open is a day or more away), with `STRIKE_BPS` and a notional capped at the contract's
+   `maxNotionalLimit`.
+3. **Resolve** each market with the first cash-session round at or after its resolve time
+   (`resolveWithRound`, so it never depends on scan limits), or **void** it once the 60-minute
+   window has passed so stakes can be refunded.
+4. **Vault cycle books:** start a cycle at the close when flat; at the open, flatten (only if a
+   swap adapter is set) and end the cycle.
+
+Every write is simulated first and skipped if it would revert. The keeper wallet needs only
+keeper rights and a little ETH for gas. It can't set prices or move user funds.
+
+## Environment
+
+| Variable | Default | Notes |
+|---|---|---|
+| `KEEPER_PRIVATE_KEY` | required | The keeper wallet. Never the owner Safe. |
+| `CHAIN_ID` | `4663` | Must match the RPC. |
+| `RPC_URL` | Robinhood mainnet RPC | Alchemy etc. also fine. |
+| `MARKET_SCHEDULE` | `weekend` | `weekend`, `daily` or `off`. |
+| `STRIKE_BPS` | `100` | 1.00% gap. |
+| `MARKET_NOTIONAL_USDG` | contract limit | Per-market cap, never above `maxNotionalLimit`. |
+| `VAULT_CYCLES` | `on` | Set `off` to skip vault bookkeeping. |
+| `DRY_RUN` | `false` | `true`: read and simulate only, send nothing. |
+| `PORT` | unset | If set, serves a JSON health/status endpoint. |
+| `ORACLE` `MARKET` `VAULT` `NVDA` | from `deployments/<CHAIN_ID>.json` | Optional overrides. |
+
+## Run
+
+```bash
+cd keeper && npm ci
+DRY_RUN=true node src/keeper.mjs --once                        # mainnet, simulate one tick
+KEEPER_PRIVATE_KEY=0x… node src/keeper.mjs                      # mainnet, run forever
+CHAIN_ID=31337 RPC_URL=http://127.0.0.1:8545 KEEPER_PRIVATE_KEY=0xac09…ff80 node src/keeper.mjs --once   # local demo chain
+```
+
+On Railway, add a second service from this repo, and under Settings set **Config-as-code
+file** to `keeper/railway.json`. See `docs/LAUNCH.md`.

@@ -22,24 +22,47 @@ abstract contract DeployBase is Script {
         AmenMarket market;
     }
 
-    function _deployCore(address owner, address usdg, address nvda, address feed, address feeRecipient)
-        internal
-        returns (Core memory c)
-    {
-        // Deployer is the initial owner so it can wire things; ownership moves to `owner` at the end (2-step).
+    /// @dev Deploys and wires the core. The deployer stays owner so the caller can finish
+    ///      configuration; call `_handOver` last (Ownable2Step: `owner` must then accept).
+    function _deployCore(
+        address usdg,
+        address nvda,
+        address feed,
+        address feeRecipient,
+        uint256[] memory holidays
+    ) internal returns (Core memory c) {
         address deployer = msg.sender;
         c.oracle = new AmenOracle(deployer);
         c.oracle.setFeed(nvda, feed);
         c.vault = new VespersVault(deployer, usdg, nvda, address(c.oracle), feeRecipient);
         c.market = new AmenMarket(deployer, usdg, address(c.oracle), feeRecipient);
         c.market.setStockAllowed(nvda, true);
-        // Next two NYSE full-day holidays after this build (2026-09-24): Thanksgiving and Christmas.
-        c.oracle.setHoliday(SessionLib.daysFromCivil(2026, 11, 26), true);
-        c.oracle.setHoliday(SessionLib.daysFromCivil(2026, 12, 25), true);
-        if (owner != deployer) {
-            c.oracle.transferOwnership(owner);
-            c.vault.transferOwnership(owner);
-            c.market.transferOwnership(owner);
+        for (uint256 i; i < holidays.length; ++i) {
+            c.oracle.setHoliday(holidays[i], true);
+        }
+    }
+
+    function _handOver(Core memory c, address owner) internal {
+        if (owner == msg.sender) return;
+        c.oracle.transferOwnership(owner);
+        c.vault.transferOwnership(owner);
+        c.market.transferOwnership(owner);
+    }
+
+    /// @dev Next two NYSE full-day holidays after this build (2026-09-24): Thanksgiving and Christmas.
+    function _defaultHolidays() internal pure returns (uint256[] memory h) {
+        h = new uint256[](2);
+        h[0] = SessionLib.daysFromCivil(2026, 11, 26);
+        h[1] = SessionLib.daysFromCivil(2026, 12, 25);
+    }
+
+    /// @dev "YYYY-MM-DD" strings to UTC day indices (the oracle's holiday keys).
+    function _parseDays(string[] memory dates) internal pure returns (uint256[] memory out) {
+        out = new uint256[](dates.length);
+        for (uint256 i; i < dates.length; ++i) {
+            string[] memory p = vm.split(dates[i], "-");
+            require(p.length == 3, "bad date");
+            out[i] = SessionLib.daysFromCivil(vm.parseUint(p[0]), vm.parseUint(p[1]), vm.parseUint(p[2]));
         }
     }
 
@@ -66,50 +89,160 @@ abstract contract DeployBase is Script {
     }
 }
 
-/// @notice Mainnet (4663) deploy from config/4663.json. Refuses any other chain and re-checks
-///         symbol/decimals/bytecode before broadcasting.
-/// forge script script/Deploy.s.sol:DeployMainnet --rpc-url robinhood --broadcast \
-///   --verify --verifier blockscout --verifier-url https://robinhoodchain.blockscout.com/api/
+/// @notice Mainnet (4663) guarded-beta deploy. Addresses from config/4663.json, launch settings
+///         (caps, fee, NYSE holidays) from config/launch-4663.json. Refuses any other chain,
+///         re-checks symbol/decimals/bytecode, and verifies every setting after deploying.
+///
+///   OWNER=<Safe address> KEEPER=<keeper EOA> [FEE_RECIPIENT=<addr, default OWNER>] \
+///   forge script script/Deploy.s.sol:DeployMainnet --rpc-url robinhood --broadcast \
+///     --verify --verifier blockscout --verifier-url https://robinhoodchain.blockscout.com/api/
+///
+/// Omit --broadcast (and --verify) for a dry run against live mainnet state.
+/// OWNER must be a contract (the Safe) unless ALLOW_EOA_OWNER=true. After broadcasting, the
+/// Safe must call acceptOwnership() on the oracle, vault and market (Ownable2Step).
 contract DeployMainnet is DeployBase {
+    struct Addrs {
+        address usdg;
+        address nvda;
+        address feed;
+        address factory;
+        address pool;
+        uint24 feeTier;
+    }
+
+    struct Launch {
+        uint256 depositCap; // USDG, 6 dec
+        uint256 maxNotional; // USDG, 6 dec
+        uint256 takerFeeBps;
+        uint256[] holidays; // UTC day indices
+    }
+
+    struct Roles {
+        address owner;
+        address keeper;
+        address feeRecipient;
+    }
+
     function run() external {
         require(block.chainid == 4663, "DeployMainnet: chainid != 4663");
-        string memory cfg = vm.readFile(string.concat(vm.projectRoot(), "/config/4663.json"));
-        address usdg = vm.parseJsonAddress(cfg, ".usdg");
-        address nvda = vm.parseJsonAddress(cfg, ".nvda");
-        address feed = vm.parseJsonAddress(cfg, ".nvdaFeed");
-        address factory = vm.parseJsonAddress(cfg, ".uniswapV3Factory");
-        uint24 feeTier = uint24(vm.parseJsonUint(cfg, ".uniswapFeeTier"));
-        address pool = vm.parseJsonAddress(cfg, ".nvdaUsdgPool");
-
-        // Live re-verification (brief: "Always re-read symbol(), decimals(), and bytecode on-chain").
-        require(usdg.code.length > 0 && nvda.code.length > 0 && feed.code.length > 0, "missing bytecode");
-        require(IERC20Metadata(usdg).decimals() == 6, "USDG decimals != 6");
-        require(IStockToken(nvda).decimals() == 18, "NVDA decimals != 18");
-        require(IStockToken(nvda).uiMultiplier() > 0, "NVDA uiMultiplier");
-        (, int256 answer,, uint256 updatedAt,) = IAggregatorV3(feed).latestRoundData();
-        require(answer > 0 && updatedAt > 0, "feed");
-        require(IAggregatorV3(feed).decimals() == 8, "feed decimals != 8");
-        // The adapter resolves the pool via the factory; it must be the configured 0.05% NVDA/USDG pool.
-        require(IUniswapV3Factory(factory).getPool(usdg, nvda, feeTier) == pool, "pool mismatch");
-        console2.log("USDG", IERC20Metadata(usdg).symbol());
-        console2.log("NVDA", IStockToken(nvda).symbol(), "feed decimals", IAggregatorV3(feed).decimals());
-
-        address owner = vm.envOr("OWNER", msg.sender);
-        address feeRecipient = vm.envOr("FEE_RECIPIENT", owner);
+        Addrs memory a = _loadAddrs();
+        Launch memory l = _loadLaunch();
+        Roles memory r = _loadRoles();
+        _checkLive(a);
 
         vm.startBroadcast();
-        Core memory c = _deployCore(owner, usdg, nvda, feed, feeRecipient);
+        Core memory c = _deployCore(a.usdg, a.nvda, a.feed, r.feeRecipient, l.holidays);
+        c.oracle.setKeeper(r.keeper, true);
+        c.vault.setKeeper(r.keeper, true);
+        c.market.setKeeper(r.keeper, true);
+        c.vault.setDepositCap(l.depositCap);
+        c.market.setFeeParams(r.feeRecipient, l.takerFeeBps, l.maxNotional);
         address adapter;
         if (_adapterEnabled()) {
-            adapter = address(new UniswapV3PoolAdapter(factory, feeTier));
-            // Ownable2Step: the deployer stays owner until `owner` accepts, so wiring still works here.
+            adapter = address(new UniswapV3PoolAdapter(a.factory, a.feeTier));
             c.vault.setSwapAdapter(adapter);
         } else {
             console2.log("swap adapter NOT set (ADAPTER_ENABLED!=true): vault inventory swaps disabled");
         }
+        _handOver(c, r.owner);
         vm.stopBroadcast();
 
-        _write(c, usdg, nvda, feed, adapter);
+        _verify(c, a, l, r, adapter);
+
+        vm.serializeAddress("deployment", "owner", r.owner);
+        vm.serializeAddress("deployment", "keeper", r.keeper);
+        vm.serializeUint("deployment", "vaultDepositCap", l.depositCap);
+        vm.serializeUint("deployment", "maxNotionalPerMarket", l.maxNotional);
+        _write(c, a.usdg, a.nvda, a.feed, adapter);
+
+        console2.log("--- guarded beta ---");
+        console2.log("vault deposit cap (USDG, 6 dec):", l.depositCap);
+        console2.log("max notional per market (USDG, 6 dec):", l.maxNotional);
+        console2.log("holidays set:", l.holidays.length);
+        console2.log("NEXT: from the Safe, call acceptOwnership() on oracle, vault and market");
+    }
+
+    function _loadAddrs() internal view returns (Addrs memory a) {
+        string memory cfg = vm.readFile(string.concat(vm.projectRoot(), "/config/4663.json"));
+        a.usdg = vm.parseJsonAddress(cfg, ".usdg");
+        a.nvda = vm.parseJsonAddress(cfg, ".nvda");
+        a.feed = vm.parseJsonAddress(cfg, ".nvdaFeed");
+        a.factory = vm.parseJsonAddress(cfg, ".uniswapV3Factory");
+        a.pool = vm.parseJsonAddress(cfg, ".nvdaUsdgPool");
+        a.feeTier = uint24(vm.parseJsonUint(cfg, ".uniswapFeeTier"));
+    }
+
+    function _loadLaunch() internal view returns (Launch memory l) {
+        string memory launch = vm.readFile(string.concat(vm.projectRoot(), "/config/launch-4663.json"));
+        l.depositCap = vm.parseJsonUint(launch, ".vaultDepositCapUsdg") * 1e6;
+        l.maxNotional = vm.parseJsonUint(launch, ".maxNotionalPerMarketUsdg") * 1e6;
+        l.takerFeeBps = vm.parseJsonUint(launch, ".takerFeeBps");
+        l.holidays = _parseDays(vm.parseJsonStringArray(launch, ".nyseHolidays"));
+        require(l.depositCap > 0 && l.maxNotional > 0 && l.takerFeeBps <= 500, "bad launch settings");
+    }
+
+    /// @dev Roles: a Safe owns; a separate hot wallet only keeps.
+    function _loadRoles() internal view returns (Roles memory r) {
+        r.owner = vm.envAddress("OWNER");
+        r.keeper = vm.envAddress("KEEPER");
+        r.feeRecipient = vm.envOr("FEE_RECIPIENT", r.owner);
+        require(
+            r.owner != address(0) && r.keeper != address(0) && r.feeRecipient != address(0),
+            "zero role address"
+        );
+        require(r.keeper != r.owner, "KEEPER must differ from OWNER");
+        require(
+            r.owner.code.length > 0 || vm.envOr("ALLOW_EOA_OWNER", false), "OWNER is not a contract (Safe)"
+        );
+    }
+
+    /// @dev Live re-verification (brief: "Always re-read symbol(), decimals(), and bytecode on-chain").
+    function _checkLive(Addrs memory a) internal view {
+        require(
+            a.usdg.code.length > 0 && a.nvda.code.length > 0 && a.feed.code.length > 0, "missing bytecode"
+        );
+        require(IERC20Metadata(a.usdg).decimals() == 6, "USDG decimals != 6");
+        require(IStockToken(a.nvda).decimals() == 18, "NVDA decimals != 18");
+        require(IStockToken(a.nvda).uiMultiplier() > 0, "NVDA uiMultiplier");
+        (, int256 answer,, uint256 updatedAt,) = IAggregatorV3(a.feed).latestRoundData();
+        require(answer > 0 && updatedAt > 0, "feed");
+        require(IAggregatorV3(a.feed).decimals() == 8, "feed decimals != 8");
+        // The adapter resolves the pool via the factory; it must be the configured 0.05% NVDA/USDG pool.
+        require(IUniswapV3Factory(a.factory).getPool(a.usdg, a.nvda, a.feeTier) == a.pool, "pool mismatch");
+        console2.log("USDG", IERC20Metadata(a.usdg).symbol());
+        console2.log("NVDA", IStockToken(a.nvda).symbol(), "feed decimals", IAggregatorV3(a.feed).decimals());
+    }
+
+    /// @dev Post-conditions: fail loudly rather than ship a half-configured protocol.
+    function _verify(Core memory c, Addrs memory a, Launch memory l, Roles memory r, address adapter)
+        internal
+        view
+    {
+        require(
+            c.oracle.isKeeper(r.keeper) && c.vault.isKeeper(r.keeper) && c.market.isKeeper(r.keeper),
+            "keeper not set"
+        );
+        require(c.vault.depositCap() == l.depositCap, "deposit cap not set");
+        require(
+            c.market.maxNotionalLimit() == l.maxNotional && c.market.takerFeeBps() == l.takerFeeBps,
+            "market caps"
+        );
+        require(
+            c.market.feeRecipient() == r.feeRecipient && c.vault.feeRecipient() == r.feeRecipient,
+            "fee recipient"
+        );
+        require(address(c.vault.swapAdapter()) == adapter, "adapter");
+        require(c.market.stockAllowed(a.nvda) && c.oracle.feedOf(a.nvda) == a.feed, "wiring");
+        for (uint256 i; i < l.holidays.length; ++i) {
+            require(c.oracle.isHoliday(l.holidays[i]), "holiday not set");
+        }
+        if (r.owner != msg.sender) {
+            require(
+                c.oracle.pendingOwner() == r.owner && c.vault.pendingOwner() == r.owner
+                    && c.market.pendingOwner() == r.owner,
+                "ownership not pending to OWNER"
+            );
+        }
     }
 }
 
@@ -131,7 +264,7 @@ abstract contract DeployMocks is DeployBase {
         // Seed a price so the oracle has a mark. The round is stamped at block time.
         feed.setAnswer(180_00000000);
 
-        Core memory c = _deployCore(deployer, address(usdg), address(nvda), address(feed), deployer);
+        Core memory c = _deployCore(address(usdg), address(nvda), address(feed), deployer, _defaultHolidays());
         address adapter;
         if (_adapterEnabled()) {
             adapter = address(mockVenue);

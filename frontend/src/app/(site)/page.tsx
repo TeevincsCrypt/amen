@@ -17,6 +17,7 @@ import {
 import { GapIllustration } from "@/components/site/gap-illustration";
 import { SplitBar } from "@/components/split-bar";
 import { REPO_URL } from "@/components/site/site-footer";
+import { DEMO_URL, isMainnet } from "@/lib/chains";
 
 const FACTS = [
   { value: "≤ 50%", label: "of vault NAV in NVDA, added only while US cash is closed" },
@@ -70,7 +71,7 @@ export default function Landing() {
           <div className="space-y-7">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground">
               <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-primary" />
-              Built for Robinhood Chain · official NVDA Stock Tokens
+              {isMainnet ? "Guarded beta · live on Robinhood Chain" : "Built for Robinhood Chain · official NVDA Stock Tokens"}
             </span>
             <h1 className="text-[2.6rem] font-semibold leading-[1.04] tracking-tight sm:text-6xl">
               Get paid to take the other side of <span className="text-brand-gradient">overnight NVDA.</span>
@@ -270,9 +271,13 @@ export default function Landing() {
           <div className="pointer-events-none absolute -bottom-24 left-10 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,rgba(42,111,217,0.25),transparent)]" />
           <div className="relative flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
             <div className="max-w-xl space-y-3">
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Friday close to Monday open, in twelve clicks.</h2>
+              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                {isMainnet ? "Guarded beta, live on Robinhood Chain." : "Friday close to Monday open, in twelve clicks."}
+              </h2>
               <p className="text-muted-foreground">
-                The live demo runs on a public test chain with mock NVDA and USDG. No wallet, no real funds.
+                {isMainnet
+                  ? "Deposits and market sizes are capped while Amen is unaudited. Only use what you can afford to lose. Not available to US persons."
+                  : "The live demo runs on a public test chain with mock NVDA and USDG. No wallet, no real funds."}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -280,8 +285,18 @@ export default function Landing() {
                 href="/app"
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
-                Launch the demo <ArrowRight className="h-4 w-4" />
+                {isMainnet ? "Launch app" : "Launch the demo"} <ArrowRight className="h-4 w-4" />
               </Link>
+              {isMainnet && DEMO_URL && (
+                <a
+                  href={DEMO_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-border px-5 font-medium transition-colors hover:bg-muted"
+                >
+                  Try the demo first <ArrowUpRight className="h-4 w-4" />
+                </a>
+              )}
               <a
                 href={REPO_URL}
                 target="_blank"

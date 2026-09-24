@@ -34,4 +34,4 @@ Robinhood Stock Tokens are **debt securities** issued by Robinhood Assets (Jerse
 - The Chainlink price is already multiplier-aware, so Amen never applies the multiplier to it.
 
 ## 6. US persons excluded
-Amen isn't available to US persons. There's no US onboarding and no fiat on-ramp. It isn't a broker and gives no investment advice. The UI shows an eligibility attestation and a persistent notice on every page.
+Amen isn't available to US persons. Mainnet builds also block US and sanctioned-country IPs from the app (best effort; VPNs exist). There's no US onboarding and no fiat on-ramp. It isn't a broker and gives no investment advice. The UI shows an eligibility attestation and a persistent notice on every page.

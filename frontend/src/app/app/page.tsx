@@ -209,7 +209,10 @@ function Overview() {
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No markets yet.{isLocal && " The demo chain starts at Friday 16:02 New York. Run steps 1–2 of the demo below to create Market #1."}
+                No markets yet.
+                {isLocal
+                  ? " The demo chain starts at Friday 16:02 New York. Run steps 1–2 of the demo below to create Market #1."
+                  : " New gap markets open after Friday's 16:00 New York close."}
               </p>
             )}
           </CardContent>

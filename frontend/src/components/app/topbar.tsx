@@ -8,7 +8,7 @@ import { Logo } from "@/components/logo";
 import { APP_NAV } from "./sidebar";
 import { useChainNow, useSession } from "@/lib/hooks";
 import { fmtAge, fmtUsd18 } from "@/lib/format";
-import { activeChain, isLocal } from "@/lib/chains";
+import { activeChain, isLocal, isMainnet } from "@/lib/chains";
 import { cn } from "@/lib/utils";
 
 function Chip({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -36,6 +36,7 @@ export function Topbar() {
             {isLocal ? "Demo chain" : activeChain.name}
             <span className="font-mono text-[10.5px] opacity-70">{activeChain.id}</span>
           </Chip>
+          {isMainnet && <Chip className="border-primary/30 bg-primary/10 text-primary">Guarded beta</Chip>}
           <Chip>
             NVDA/USD <span className="font-mono text-foreground">{fmtUsd18(s.markPrice)}</span>
           </Chip>
