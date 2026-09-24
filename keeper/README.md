@@ -6,9 +6,11 @@ Runs Amen's routine, time-driven jobs every `INTERVAL_SEC` (30 s):
    before the bell, within 30 minutes. Uses `recordSessionCloseAtRound` if the feed already
    ticked after the bell. If the last pre-bell round is older than 30 minutes, it only warns;
    forcing a close is left to a human.
-2. **Create the NVDA gap market** for that close (`MARKET_SCHEDULE=weekend`: only when the next
-   open is a day or more away), with `STRIKE_BPS` and a notional capped at the contract's
-   `maxNotionalLimit`.
+2. **Create a gap market for every listed ticker** for that close (`MARKET_SCHEDULE=weekend`:
+   only when the next open is a day or more away), with `STRIKE_BPS` and a notional capped at
+   the contract's `maxNotionalLimit`. Tickers are read from the chain each tick
+   (`oracle.allStocks()` filtered by `market.stockAllowed`), so a ticker listed from the Safe is
+   picked up without a restart. The close is recorded for each ticker too.
 3. **Resolve** each market with the first cash-session round at or after its resolve time
    (`resolveWithRound`, so it never depends on scan limits), or **void** it once the 60-minute
    window has passed so stakes can be refunded.
@@ -28,10 +30,11 @@ keeper rights and a little ETH for gas. It can't set prices or move user funds.
 | `MARKET_SCHEDULE` | `weekend` | `weekend`, `daily` or `off`. |
 | `STRIKE_BPS` | `100` | 1.00% gap. |
 | `MARKET_NOTIONAL_USDG` | contract limit | Per-market cap, never above `maxNotionalLimit`. |
+| `MARKET_TICKERS` | all listed | Optional comma list, e.g. `NVDA,AAPL`, to open markets for only those tickers. Closes are still recorded and markets still resolved for all. |
 | `VAULT_CYCLES` | `on` | Set `off` to skip vault bookkeeping. |
 | `DRY_RUN` | `false` | `true`: read and simulate only, send nothing. |
 | `PORT` | unset | If set, serves a JSON health/status endpoint. |
-| `ORACLE` `MARKET` `VAULT` `NVDA` | from `deployments/<CHAIN_ID>.json` | Optional overrides. |
+| `ORACLE` `MARKET` `VAULT` | from `deployments/<CHAIN_ID>.json` | Optional overrides. |
 
 ## Run
 

@@ -37,6 +37,9 @@ contract AmenOracle is IAmenOracle, AmenAccess, NetworkGuard {
     mapping(uint256 word => uint256 bits) internal _holidayBitmap;
     mapping(address stockToken => mapping(uint256 sessionId => Mark)) internal _officialClose;
     mapping(address stockToken => uint256 sessionId) public lastRecordedSession;
+    /// @dev Every Stock Token ever registered, in registration order, so UIs and keepers can
+    ///      discover tickers on-chain. A stock stays listed if its feed is replaced.
+    address[] internal _stocks;
 
     SessionLib.DstMode public dstMode;
     bool public manualFreeze;
@@ -67,9 +70,20 @@ contract AmenOracle is IAmenOracle, AmenAccess, NetworkGuard {
         if (stockToken == address(0) || feed == address(0)) revert Errors.ZeroAddress();
         uint8 dec = IAggregatorV3(feed).decimals();
         if (dec > 36) revert Errors.InvalidParam();
+        if (feedOf[stockToken] == address(0)) _stocks.push(stockToken);
         feedOf[stockToken] = feed;
         feedDecimals[stockToken] = dec;
         emit FeedSet(stockToken, feed, dec);
+    }
+
+    /// @notice Every registered Stock Token, in registration order.
+    function allStocks() external view returns (address[] memory) {
+        return _stocks;
+    }
+
+    /// @notice Number of registered Stock Tokens.
+    function stockCount() external view returns (uint256) {
+        return _stocks.length;
     }
 
     /// @notice Marks a NY trading date as a full-day market holiday (cash closed all day) or clears it.

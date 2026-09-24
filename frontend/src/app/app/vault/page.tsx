@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
-import { formatUnits, maxUint256, parseUnits, zeroAddress } from "viem";
+import { formatUnits, maxUint256, parseUnits, zeroAddress, type Address } from "viem";
 import { Lock, Wrench } from "lucide-react";
 import { deployment, usdgAbi, vespersVaultAbi } from "@/lib/contracts";
-import { useRoles, useSession, useTx } from "@/lib/hooks";
+import { useRoles, useSession, useStock, useTx } from "@/lib/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +64,8 @@ function Vault() {
       { ...V, functionName: "maxDeviationBps" },
       { ...V, functionName: "depositCap" },
       { ...V, functionName: "maxDeposit", args: [me] },
+      { ...V, functionName: "stock" },
+      { ...V, functionName: "symbol" },
     ],
     query: { refetchInterval: 4_000 },
   });
@@ -84,6 +86,10 @@ function Vault() {
   const maxDevBps = r<bigint>(12);
   const depositCap = r<bigint>(13);
   const capRoom = r<bigint>(14);
+  const vaultStock = useStock(r<Address>(15));
+  const sym = vaultStock?.symbol ?? "…";
+  const shareSym = r<string>(16) ?? "shares";
+  const stockMark = vaultStock?.mark;
   const capped = depositCap !== undefined && depositCap < 2n ** 255n;
 
 
@@ -104,12 +110,15 @@ function Vault() {
 
   const holdsStock = (stockRaw ?? 0n) > 0n;
   const vespersLock = holdsStock && !session.cashOpen;
-  const frozenLock = session.frozen && (holdsStock || session.cashOpen);
+  // A freeze of this vault's own stock (or a protocol-wide freeze) locks NAV-based entry and exit.
+  const stockFrozen = session.manualFreeze || !!stockMark?.frozen;
+  const frozenReason = session.manualFreeze ? "MANUAL" : (stockMark?.freezeReason ?? "");
+  const frozenLock = stockFrozen && (holdsStock || session.cashOpen);
   const needsFlatten = tab === "withdraw" && usdgFree !== undefined && amount > usdgFree;
   const lockReason = frozenLock
-    ? `Oracle frozen (${session.freezeReason}). Deposits and withdrawals are locked until the mark is healthy.`
+    ? `${sym} oracle frozen (${frozenReason}). Deposits and withdrawals are locked until the mark is healthy.`
     : vespersLock
-      ? "The vault is carrying NVDA through Vespers. Its weekend mark may be stale, so entry and exit reopen after the next flatten."
+      ? `The vault is carrying ${sym} through Vespers. Its weekend mark may be stale, so entry and exit reopen after the next flatten.`
       : undefined;
 
   const submit = async () => {
@@ -130,7 +139,7 @@ function Vault() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Vespers Vault · NVDA / USDG" title="Inventory for the hours the market sleeps.">
+      <PageHeader eyebrow={`Vespers Vault · ${sym} / USDG`} title="Inventory for the hours the market sleeps.">
         <Badge variant={lockReason ? "frozen" : "cash"}>
           {lockReason ? <Lock className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
           {lockReason ? "Entry / exit locked" : "Entry / exit open"}
@@ -150,14 +159,14 @@ function Vault() {
           <Figure text={fmtUsdg(nav)} className="mt-1 block text-3xl" />
           <p className="font-mono text-[10.5px] text-muted-foreground">USDG · 6 dec</p>
         </div>
-        <Stat className="p-5" label="Share price" value={fmtUsdg(sharePrice, 6)} unit="USDG per 1 vspNVDA" />
+        <Stat className="p-5" label="Share price" value={fmtUsdg(sharePrice, 6)} unit={`USDG per 1 ${shareSym}`} />
         <Stat
           className="p-5"
           label={capped ? "Beta deposit cap" : "Shares outstanding"}
           value={capped ? `${fmtUsdg(nav, 0)} / ${fmtUsdg(depositCap, 0)}` : fmt18(supply, 2)}
-          unit={capped ? "USDG NAV used / cap" : "vspNVDA · 18 dec"}
+          unit={capped ? "USDG NAV used / cap" : `${shareSym} · 18 dec`}
         />
-        <Stat className="p-5" label="NVDA mark" value={fmtUsd18(session.markPrice)} unit="USD · Chainlink → 18 dec" />
+        <Stat className="p-5" label={`${sym} mark`} value={fmtUsd18(stockMark?.priceUsd)} unit={stockMark?.frozen ? `frozen · ${stockMark.freezeReason}` : "USD · Chainlink → 18 dec"} />
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -166,20 +175,20 @@ function Vault() {
             <Card>
               <CardHeader>
                 <CardTitle>Inventory</CardTitle>
-                <CardDescription>NVDA only while cash is closed, up to {fmtBps(maxInvBps)} of NAV. Swaps within {fmtBps(maxDevBps)} of the mark.</CardDescription>
+                <CardDescription>{sym} only while cash is closed, up to {fmtBps(maxInvBps)} of NAV. Swaps within {fmtBps(maxDevBps)} of the mark.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5 pt-4">
                 <SplitBar
                   marker={maxInvBps !== undefined ? { at: 100 - Number(maxInvBps) / 100, label: `${fmtBps(maxInvBps)} cap` } : undefined}
                   segments={[
                     { label: "USDG", value: Number(usdgFree ?? 0n), display: `${fmtUsdg(usdgFree)} USDG`, color: "s1" },
-                    { label: "NVDA", value: Number(stockValue ?? 0n), display: `${fmtUsdg(stockValue)} USDG`, color: "s2" },
+                    { label: sym, value: Number(stockValue ?? 0n), display: `${fmtUsdg(stockValue)} USDG`, color: "s2" },
                   ]}
                 />
                 <div className="divide-y divide-border">
                   <DetailRow k="USDG free" v={`${fmtUsdg(usdgFree)} USDG`} />
-                  <DetailRow k="NVDA held" v={`${fmt18(stockRaw, 6)} raw`} />
-                  <DetailRow k="NVDA value" v={`${fmtUsdg(stockValue)} USDG`} />
+                  <DetailRow k={`${sym} held`} v={`${fmt18(stockRaw, 6)} raw`} />
+                  <DetailRow k={`${sym} value`} v={`${fmtUsdg(stockValue)} USDG`} />
                 </div>
               </CardContent>
             </Card>
@@ -237,9 +246,9 @@ function Vault() {
                       size="sm"
                       variant="outline"
                       disabled={keeperTx.busy}
-                      onClick={() => keeperTx.send("Buy NVDA inventory", { ...V, functionName: "buyInventory", args: [safeParse(buyAmt, 6), 0n] })}
+                      onClick={() => keeperTx.send(`Buy ${sym} inventory`, { ...V, functionName: "buyInventory", args: [safeParse(buyAmt, 6), 0n] })}
                     >
-                      Buy NVDA (USDG)
+                      Buy {sym} (USDG)
                     </Button>
                   </div>
                   <Button size="sm" variant="outline" disabled={keeperTx.busy} onClick={() => keeperTx.send("Flatten", { ...V, functionName: "flatten", args: [0n] })}>
@@ -315,7 +324,7 @@ function Vault() {
             <div className="divide-y divide-border rounded-lg border border-border px-3">
               <DetailRow
                 k={tab === "deposit" ? "You receive ≈" : "Shares burned ≈"}
-                v={tab === "withdraw" && !amt ? `${fmt18(myShares, 4)} vspNVDA` : `${fmt18(previewShares, 4)} vspNVDA`}
+                v={tab === "withdraw" && !amt ? `${fmt18(myShares, 4)} ${shareSym}` : `${fmt18(previewShares, 4)} ${shareSym}`}
               />
               <DetailRow k="Share price" v={`${fmtUsdg(sharePrice, 6)} USDG`} />
               {tab === "withdraw" && <DetailRow k="Free USDG in vault" v={`${fmtUsdg(usdgFree)} USDG`} />}
@@ -334,7 +343,7 @@ function Vault() {
             </Button>
             <TxStatus state={tx.state} className="mt-0" />
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Paid in USDG (6 decimals). Shares are vspNVDA (18 decimals). In-kind exits are disabled in Phase 1.
+              Paid in USDG (6 decimals). Shares are {shareSym} (18 decimals). In-kind exits are disabled in Phase 1.
             </p>
           </CardContent>
         </Card>

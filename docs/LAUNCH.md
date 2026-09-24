@@ -12,6 +12,8 @@ else should ever see a private key.
 | Taker fee | 1% |
 | Vault inventory swaps | off (no swap adapter) |
 | NYSE holidays loaded | 2026-11-26 → 2027-12-24 |
+| Tickers listed | NVDA, AAPL, SPY (`config/stocks-4663.json`) |
+| Vault stock | NVDA only |
 
 **Roles**:
 
@@ -34,6 +36,8 @@ else should ever see a private key.
 - [ ] **Holidays.** Check the list in `config/launch-4663.json` against
   https://www.nyse.com/markets/hours-calendars.
 - [ ] **Live checks.** Run `docs/VERIFY.md`. The fork tests must show 6 passed.
+- [ ] **Tickers.** For each entry in `config/stocks-4663.json`, run
+  `./script/check-stock.sh <SYMBOL> <token> <feed>`. Every line must pass. Remove any that don't.
 
 ## 1. Wallets
 
@@ -54,8 +58,8 @@ forge script script/Deploy.s.sol:DeployMainnet --rpc-url robinhood -vv
 rm deployments/4663.json   # the dry run writes simulated addresses; don't keep them
 ```
 
-It must print `vault deposit cap … 10000000000`, `max notional … 2000000000`, `holidays set: 12`
-and the `NEXT: from the Safe…` line. It refuses to run if `OWNER` is not a contract or equals
+It must print `vault deposit cap … 10000000000`, `max notional … 2000000000`, `holidays set: 12`,
+`tickers listed: 3` and the `NEXT: from the Safe…` line. It refuses to run if `OWNER` is not a contract or equals
 `KEEPER`.
 
 ## 3. Deploy
@@ -99,7 +103,7 @@ git commit -m "Mainnet guarded-beta deployment" && git push
    `DRY_RUN` to go live.
 
 What it does each week: after Friday's 16:00 New York bell it records the close and opens the
-weekend market. At Monday's open it resolves the market with the first print at or after 09:30,
+weekend market for every listed ticker (or only those in `MARKET_TICKERS`, e.g. `NVDA,AAPL`). At Monday's open it resolves the market with the first print at or after 09:30,
 or voids it after 60 minutes so everyone can claim a refund.
 
 ## 7. Two websites on Vercel
@@ -127,7 +131,9 @@ your region".
 | Raise the market cap / fee | Safe | `market.setFeeParams(<feeRecipient>, <feeBps>, <maxNotional × 1e6>)` |
 | Add a holiday | Safe or keeper | `oracle.setHoliday(<unix day = timestamp / 86400>, true)` |
 | Rotate the keeper | Safe | `setKeeper(old, false)` and `setKeeper(new, true)` on oracle, vault and market |
-| Missed close (feed outage) | Safe or keeper | `oracle.forceRecordSessionClose(nvda, sessionId, roundId)` (still a Chainlink round) |
+| List a ticker | Safe | run `script/check-stock.sh` first, then `oracle.setFeed(<token>, <feed>)` and `market.setStockAllowed(<token>, true)` |
+| Delist a ticker | Safe | `market.setStockAllowed(<token>, false)` (open markets still settle) |
+| Missed close (feed outage) | Safe or keeper | `oracle.forceRecordSessionClose(<token>, sessionId, roundId)` (still a Chainlink round) |
 | Collect fees | Anyone | `market.claimFees()`, `vault.claimFees()` → sent to the fee recipient |
 
 **Before a normal weekend:** check the keeper log has no `WARN`, and that its ETH balance
@@ -136,6 +142,6 @@ covers a week of gas.
 ## Not in the beta
 
 - **Vault inventory:** no NVDA is bought, because no swap adapter is set. The vault holds USDG
-  only until you enable swaps.
-- **More assets:** no AAPL or SPY, and no other market types.
+  only until you enable swaps. The vault is single-ticker (NVDA); markets are not.
+- **Other market types:** gap markets only from the keeper; no other market kinds.
 - **Wallets:** injected wallets only (MetaMask and similar). WalletConnect needs a project id.

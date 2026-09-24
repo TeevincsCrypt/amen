@@ -2,8 +2,11 @@
 
 The after-hours venue for official Robinhood Stock Tokens, on **Robinhood Chain** (4663 / testnet 46630).
 
-- **Vespers Vault**: a USDG ERC-4626 vault that holds NVDA inventory only while US cash is closed.
-- **Amen Market**: parimutuel NVDA gap and absolute-move books in USDG, settled on Chainlink with hard freeze rules.
+- **Amen Market**: parimutuel gap and absolute-move books in USDG on **every listed Stock Token**
+  (NVDA, AAPL, SPY at launch; any Robinhood Stock Token with a Chainlink feed can be added),
+  settled on Chainlink with hard freeze rules.
+- **Vespers Vault**: a USDG ERC-4626 vault that holds one Stock Token's inventory (NVDA in the
+  beta) only while US cash is closed.
 
 > Not for US persons. Stock Tokens are debt securities and give no share ownership. Not advice. Unaudited MVP.
 
@@ -11,19 +14,43 @@ Docs: [SPEC](docs/SPEC.md) · [RISKS](docs/RISKS.md) · [BUILDATHON](docs/BUILDA
 
 ## Layout
 ```
-src/AmenOracle.sol        session clock (NY hours, DST, holidays) + Chainlink guards + official closes
-src/VespersVault.sol      ERC-4626 USDG vault, session-gated NVDA inventory, cycles, perf fee
+src/AmenOracle.sol        session clock (NY hours, DST, holidays) + Chainlink guards + official closes + ticker registry
+src/VespersVault.sol      ERC-4626 USDG vault, session-gated stock inventory (one ticker), cycles, perf fee
 src/AmenMarket.sol        GAP_CLOSE_TO_OPEN + ABS_MOVE parimutuel books, deterministic resolve, void
 src/adapters/             UniswapV3PoolAdapter (exact-input against the canonical pool)
 src/libraries/            DecimalLib, SessionLib, Errors, NetworkGuard
 src/mocks/                MockUSDG (6), MockStockToken (uiMultiplier/balanceOfUI/oraclePaused), MockAggregator
 script/Deploy.s.sol       DeployLocal (mocks, 31337) · DeployTestnet (mocks, 46630) · DeployMainnet (config/4663.json)
 script/RecordClose.s.sol  record the official NVDA close
+script/check-stock.sh     check a candidate ticker (token + Chainlink feed) before listing it
 script/local-demo.sh      one-command local demo (anvil 31337): full flow + summary, then rewinds for the UI
 test/unit, test/fork      Foundry tests; fork tests auto-skip unless chainid == 4663
 frontend/                 Next.js 14 · wagmi v2 · viem · Tailwind · shadcn-style UI
 keeper/                   keeper bot (records closes, creates/resolves/voids markets, vault cycle books)
 ```
+
+## Tickers
+Amen is not tied to one stock. The oracle keeps a registry of every Stock Token with a feed
+(`allStocks()`), and the market accepts any of them the owner allows (`stockAllowed`). The
+website, the keeper and the deploy script read that list, so a new ticker needs no code change.
+
+| Ticker | Stock Token | Chainlink feed |
+|---|---|---|
+| NVDA | `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC` | `0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15` |
+| AAPL | `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9` | `0x6B22A786bAa607d76728168703a39Ea9C99f2cD0` |
+| SPY | `0x117cc2133c37B721F49dE2A7a74833232B3B4C0C` | `0x319724394D3A0e3669269846abE664Cd621f9f6A` |
+
+To add one (addresses from https://docs.robinhood.com/chain/contracts and the Chainlink feed
+catalog):
+
+1. `./script/check-stock.sh TSLA <token> <feed>`: every line must pass.
+2. **Before the mainnet deploy:** add it to `config/stocks-4663.json`.
+   **After:** from the owner Safe, call `oracle.setFeed(<token>, <feed>)` and then
+   `market.setStockAllowed(<token>, true)`.
+
+The keeper opens a market for it the next Friday. To delist, call
+`market.setStockAllowed(<token>, false)`: open markets still settle, and no new ones are made.
+The demo chain lists five mock tickers: NVDA, AAPL, SPY, TSLA and MSFT.
 
 ## Contracts
 ```bash

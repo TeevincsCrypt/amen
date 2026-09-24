@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useBlock, useReadContract, useReadContracts, useWriteContract, usePublicClient, useAccount } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Hash } from "viem";
-import { amenOracleAbi, deployment } from "./contracts";
+import type { Address, Hash } from "viem";
+import { amenMarketAbi, amenOracleAbi, deployment, stockTokenAbi } from "./contracts";
 import { bytes32ToString } from "./format";
 import { decodeError } from "./errors";
 
@@ -26,6 +26,59 @@ export function useChainNow(): number | undefined {
   return now;
 }
 
+export type StockMark = {
+  priceUsd: bigint;
+  updatedAt: bigint;
+  roundId: bigint;
+  cashOpen: boolean;
+  frozen: boolean;
+  freezeReason: string;
+};
+export type Stock = { token: Address; symbol: string; allowed: boolean; mark?: StockMark };
+
+/**
+ * Every Stock Token listed on the oracle (discovered on-chain, so new listings appear without
+ * redeploying the site), with its symbol, market access and live mark.
+ */
+export function useStocks(): { stocks: Stock[]; loaded: boolean } {
+  const enabled = !!deployment;
+  const { data: list } = useReadContract({
+    address: deployment?.oracle,
+    abi: amenOracleAbi,
+    functionName: "allStocks",
+    query: { enabled, refetchInterval: 30_000 },
+  });
+  const tokens = (list ?? []) as readonly Address[];
+  const { data } = useReadContracts({
+    contracts: tokens.flatMap((t) => [
+      { address: t, abi: stockTokenAbi, functionName: "symbol" as const },
+      { address: deployment!.oracle, abi: amenOracleAbi, functionName: "getMark" as const, args: [t] as const },
+      { address: deployment!.market, abi: amenMarketAbi, functionName: "stockAllowed" as const, args: [t] as const },
+    ]),
+    query: { enabled: enabled && tokens.length > 0, refetchInterval: POLL },
+  });
+  const stocks: Stock[] = tokens.map((token, i) => {
+    const sym = data?.[i * 3]?.result as string | undefined;
+    const m = data?.[i * 3 + 1]?.result as
+      | { priceUsd: bigint; updatedAt: bigint; roundId: bigint; cashOpen: boolean; frozen: boolean; freezeReason: `0x${string}` }
+      | undefined;
+    const allowed = data?.[i * 3 + 2]?.result as boolean | undefined;
+    return {
+      token,
+      symbol: sym ?? `${token.slice(0, 6)}…`,
+      allowed: allowed ?? true,
+      mark: m ? { ...m, freezeReason: bytes32ToString(m.freezeReason) } : undefined,
+    };
+  });
+  return { stocks, loaded: list !== undefined && (tokens.length === 0 || data !== undefined) };
+}
+
+/** Symbol + mark for one Stock Token (from the shared list). */
+export function useStock(token: Address | undefined): Stock | undefined {
+  const { stocks } = useStocks();
+  return token ? stocks.find((s) => s.token.toLowerCase() === token.toLowerCase()) : undefined;
+}
+
 export type SessionView = {
   loaded: boolean;
   cashOpen: boolean;
@@ -33,44 +86,38 @@ export type SessionView = {
   manualFreeze: boolean;
   nextOpen?: bigint;
   nextClose?: bigint;
-  markPrice?: bigint;
-  markUpdatedAt?: bigint;
-  markRoundId?: bigint;
+  /** Protocol-wide freeze: the owner's manual freeze, or every listed ticker frozen at once. */
   frozen: boolean;
   freezeReason: string;
   state: "CASH OPEN" | "VESPERS" | "FROZEN" | "UNKNOWN";
+  stocks: Stock[];
 };
 
 export function useSession(): SessionView {
   const enabled = !!deployment;
-  const { data } = useReadContracts({
-    contracts: enabled
-      ? [
-          { address: deployment!.oracle, abi: amenOracleAbi, functionName: "sessionState" },
-          { address: deployment!.oracle, abi: amenOracleAbi, functionName: "getMark", args: [deployment!.nvda] },
-        ]
-      : [],
+  const { data: ss } = useReadContract({
+    address: deployment?.oracle,
+    abi: amenOracleAbi,
+    functionName: "sessionState",
     query: { enabled, refetchInterval: POLL },
   });
-  const ss = data?.[0]?.result as readonly [boolean, boolean, boolean, bigint, bigint] | undefined;
-  const mark = data?.[1]?.result as
-    | { priceUsd: bigint; updatedAt: bigint; roundId: bigint; cashOpen: boolean; frozen: boolean; freezeReason: `0x${string}` }
-    | undefined;
-  const frozen = !!mark?.frozen || !!ss?.[2];
+  const { stocks, loaded } = useStocks();
+  const marks = stocks.map((s) => s.mark).filter((m): m is StockMark => !!m);
+  const manual = !!ss?.[2];
+  const allFrozen = marks.length > 0 && marks.length === stocks.length && marks.every((m) => m.frozen);
+  const frozen = manual || allFrozen;
   const cashOpen = !!ss?.[0];
   return {
-    loaded: !!ss && !!mark,
+    loaded: !!ss && loaded,
     cashOpen,
     vespers: !!ss?.[1],
-    manualFreeze: !!ss?.[2],
+    manualFreeze: manual,
     nextOpen: ss?.[3],
     nextClose: ss?.[4],
-    markPrice: mark?.priceUsd,
-    markUpdatedAt: mark?.updatedAt,
-    markRoundId: mark?.roundId,
     frozen,
-    freezeReason: mark ? bytes32ToString(mark.freezeReason) || (ss?.[2] ? "MANUAL" : "") : "",
-    state: !ss || !mark ? "UNKNOWN" : frozen ? "FROZEN" : cashOpen ? "CASH OPEN" : "VESPERS",
+    freezeReason: manual ? "MANUAL" : allFrozen ? marks[0].freezeReason : "",
+    state: !ss ? "UNKNOWN" : frozen ? "FROZEN" : cashOpen ? "CASH OPEN" : "VESPERS",
+    stocks,
   };
 }
 
@@ -139,14 +186,14 @@ export function useBlockTs(): bigint | undefined {
 
 export type RoundPoint = { roundId: bigint; ts: number; price: bigint };
 
-/** Last `n` Chainlink rounds for NVDA via the oracle (price normalized to 18 dec). */
-export function useRoundHistory(n = 48): { points: RoundPoint[]; loaded: boolean } {
-  const enabled = !!deployment;
+/** Last `n` Chainlink rounds for one stock via the oracle (price normalized to 18 dec). */
+export function useRoundHistory(stock: Address | undefined, n = 48): { points: RoundPoint[]; loaded: boolean } {
+  const enabled = !!deployment && !!stock;
   const { data: latest } = useReadContract({
     address: deployment?.oracle,
     abi: amenOracleAbi,
     functionName: "latestRoundId",
-    args: deployment ? [deployment.nvda] : undefined,
+    args: stock ? [stock] : undefined,
     query: { enabled, refetchInterval: POLL },
   });
   const ids: bigint[] = [];
@@ -159,7 +206,7 @@ export function useRoundHistory(n = 48): { points: RoundPoint[]; loaded: boolean
       address: deployment!.oracle,
       abi: amenOracleAbi,
       functionName: "getRoundMark" as const,
-      args: [deployment!.nvda, id] as const,
+      args: [stock!, id] as const,
     })),
     query: { enabled: enabled && ids.length > 0, refetchInterval: POLL * 2 },
   });

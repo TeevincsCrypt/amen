@@ -5,9 +5,9 @@ import { useBlock, usePublicClient, useReadContracts } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import { maxUint256, type Address } from "viem";
 import { amenMarketAbi, amenOracleAbi, mockAggregatorAbi, stockTokenAbi, usdgAbi, vespersVaultAbi } from "@/lib/contracts";
-import { ACCOUNTS, DEMO, MARKET_ID, SESSION_ID, T } from "@/lib/demo";
+import { ACCOUNTS, DEMO, SESSION_ID, T } from "@/lib/demo";
 import { decodeError } from "@/lib/errors";
-import { demoRewind, demoRpc, demoSend, PRINT_182, type DemoCall, type Who } from "@/lib/demo-actions";
+import { demoPrintOpen, demoRewind, demoRpc, demoSend, type DemoCall, type Who } from "@/lib/demo-actions";
 import { fmt18, fmtNy, fmtUsd18, fmtUsdg } from "@/lib/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 type Call = DemoCall;
 
-type Market = { yesPool: bigint; noPool: bigint; resolved: boolean; yesWins: boolean; voided: boolean; resolvePrice: bigint; resolveMarkTs: bigint; moveBps: bigint; takerFeeBps: bigint };
+type Market = { stockToken: Address; sessionId: bigint; yesPool: bigint; noPool: bigint; resolved: boolean; yesWins: boolean; voided: boolean; resolvePrice: bigint; resolveMarkTs: bigint; moveBps: bigint; takerFeeBps: bigint };
 type Pos = { yes: bigint; no: bigint; claimed: boolean };
 type Cycle = { navStart: bigint; navEnd: bigint; realizedPnl: bigint; perfFee: bigint; endTs: bigint };
 type Mark = { priceUsd: bigint; updatedAt: bigint; roundId: bigint };
@@ -41,10 +41,6 @@ export function DemoFlow() {
       { address: DEMO.oracle, abi: amenOracleAbi, functionName: "hasOfficialClose", args: [DEMO.nvda, SESSION_ID] },
       { address: DEMO.oracle, abi: amenOracleAbi, functionName: "officialClose", args: [DEMO.nvda, SESSION_ID] },
       { ...M, functionName: "marketCount" },
-      { ...M, functionName: "getMarket", args: [MARKET_ID] },
-      { ...M, functionName: "positionOf", args: [MARKET_ID, ACCOUNTS.user1] },
-      { ...M, functionName: "positionOf", args: [MARKET_ID, ACCOUNTS.user2] },
-      { ...M, functionName: "claimable", args: [MARKET_ID, ACCOUNTS.user2] },
       { ...V, functionName: "balanceOf", args: [ACCOUNTS.owner] },
       { ...V, functionName: "currentCycleId" },
       { ...V, functionName: "stockHeld" },
@@ -58,17 +54,38 @@ export function DemoFlow() {
   const closeRecorded = !!r<boolean>(0);
   const close = r<Mark>(1);
   const marketCount = r<bigint>(2) ?? 0n;
-  const mk = r<Market>(3);
-  const p1 = r<Pos>(4);
-  const p2 = r<Pos>(5);
-  const u2Claimable = r<bigint>(6) ?? 0n;
-  const ownerShares = r<bigint>(7) ?? 0n;
-  const cycleId = r<bigint>(8) ?? 0n;
-  const stockHeld = r<bigint>(9) ?? 0n;
-  const cyc = r<Cycle>(10);
-  const feedRound = r<readonly [bigint, bigint, bigint, bigint, bigint]>(11);
-  const fees = r<bigint>(12);
-  const hasMarket = marketCount >= MARKET_ID;
+  const ownerShares = r<bigint>(3) ?? 0n;
+  const cycleId = r<bigint>(4) ?? 0n;
+  const stockHeld = r<bigint>(5) ?? 0n;
+  const cyc = r<Cycle>(6);
+  const feedRound = r<readonly [bigint, bigint, bigint, bigint, bigint]>(7);
+  const fees = r<bigint>(8);
+
+  // The demo chain also lists AAPL, SPY, TSLA and MSFT markets, so the NVDA market for this
+  // session is found by ticker and session, not assumed to be market #1.
+  const { data: heads } = useReadContracts({
+    contracts: Array.from({ length: Number(marketCount) }, (_, i) => ({ ...M, functionName: "getMarket" as const, args: [BigInt(i + 1)] as const })),
+    query: { enabled: marketCount > 0n, refetchInterval: 2_000 },
+  });
+  const nvdaIdx = (heads ?? []).findIndex((h) => {
+    const m = h.result as Market | undefined;
+    return !!m && m.stockToken.toLowerCase() === DEMO.nvda.toLowerCase() && m.sessionId === SESSION_ID;
+  });
+  const marketId = nvdaIdx >= 0 ? BigInt(nvdaIdx + 1) : undefined;
+  const mk = marketId ? (heads?.[nvdaIdx]?.result as Market | undefined) : undefined;
+  const { data: pos } = useReadContracts({
+    contracts: [
+      { ...M, functionName: "positionOf", args: [marketId ?? 0n, ACCOUNTS.user1] },
+      { ...M, functionName: "positionOf", args: [marketId ?? 0n, ACCOUNTS.user2] },
+      { ...M, functionName: "claimable", args: [marketId ?? 0n, ACCOUNTS.user2] },
+    ],
+    query: { enabled: !!marketId, refetchInterval: 2_000 },
+  });
+  const p1 = pos?.[0]?.result as Pos | undefined;
+  const p2 = pos?.[1]?.result as Pos | undefined;
+  const u2Claimable = (pos?.[2]?.result as bigint | undefined) ?? 0n;
+  const hasMarket = !!marketId;
+  const id = marketId ?? 0n;
   const total = (mk?.yesPool ?? 0n) + (mk?.noPool ?? 0n);
   const u1Payout = mk && mk.resolved && mk.yesWins && mk.yesPool > 0n && p1 ? (p1.yes * (total - (total * mk.takerFeeBps) / 10000n)) / mk.yesPool : 0n;
 
@@ -88,11 +105,10 @@ export function DemoFlow() {
     [client, qc],
   );
 
-  const warp = async (label: string, ts: number) => {
+  const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
     try {
-      await demoRpc("evm_setNextBlockTimestamp", [ts]);
-      await demoRpc("evm_mine");
+      await fn();
       setLog((l) => [{ ok: true, text: `✓ ${label}` }, ...l].slice(0, 6));
     } catch (e) {
       setLog((l) => [{ ok: false, text: `✗ ${label}: ${decodeError(e)}` }, ...l].slice(0, 6));
@@ -101,6 +117,12 @@ export function DemoFlow() {
       await qc.invalidateQueries();
     }
   };
+
+  const warp = (label: string, ts: number) =>
+    run(label, async () => {
+      await demoRpc("evm_setNextBlockTimestamp", [ts]);
+      await demoRpc("evm_mine");
+    });
 
   const rewind = async () => {
     setBusy("Rewind");
@@ -134,12 +156,12 @@ export function DemoFlow() {
     {
       n: 3, who: "user1", title: "User1 buys 100 USDG YES", detail: "Parimutuel stake; max loss is the stake.",
       done: (p1?.yes ?? 0n) >= 100_000_000n,
-      action: () => send("User1 buys YES 100", "user1", [approve(DEMO.usdg, DEMO.market), { ...M, functionName: "buy", args: [MARKET_ID, true, 100_000_000n] }]),
+      action: () => send("User1 buys YES 100", "user1", [approve(DEMO.usdg, DEMO.market), { ...M, functionName: "buy", args: [id, true, 100_000_000n] }]),
     },
     {
       n: 4, who: "user2", title: "User2 buys 300 USDG NO", detail: "Takes the other side of the overnight gap.",
       done: (p2?.no ?? 0n) >= 300_000_000n,
-      action: () => send("User2 buys NO 300", "user2", [approve(DEMO.usdg, DEMO.market), { ...M, functionName: "buy", args: [MARKET_ID, false, 300_000_000n] }]),
+      action: () => send("User2 buys NO 300", "user2", [approve(DEMO.usdg, DEMO.market), { ...M, functionName: "buy", args: [id, false, 300_000_000n] }]),
     },
     {
       n: 5, who: "owner", title: "Owner deposits 100 USDG into Vespers", detail: "The vault is flat, so NAV is exact USDG.",
@@ -157,27 +179,26 @@ export function DemoFlow() {
       action: () => warp("Warp to Monday 09:45 NY", Math.max(T.monday, now + 1)),
     },
     {
-      n: 8, who: "feed", title: "Mock feed prints $182.00 (YES)", detail: "+1.11% vs the $180 close. The mock swap venue moves with it.",
+      n: 8, who: "feed", title: "Mock feeds print Monday's open", detail: "NVDA $182.00 is +1.11% vs the $180 close (YES). AAPL, SPY, TSLA and MSFT print too, and the mock swap venue follows NVDA.",
       done: printed,
-      action: () =>
-        send("Print $182.00", "owner", PRINT_182),
+      action: () => run("Print Monday's open", () => demoPrintOpen(client!)),
     },
     {
       n: 9, who: "anyone", title: "Resolve", detail: "Uses the first cash-session print at or after 09:30, proven by round id.",
       done: !!mk?.resolved || !!mk?.voided,
-      action: () => send("Resolve", "owner", [{ ...M, functionName: "resolve", args: [MARKET_ID] }]),
+      action: () => send("Resolve", "owner", [{ ...M, functionName: "resolve", args: [id] }]),
     },
     {
       n: 10, who: "user1", title: "User1 claims", detail: "400 × (1 − 1% fee) ÷ 100 YES = 3.96× → 396 USDG.",
       done: !!p1?.claimed,
-      action: () => send("User1 claims", "user1", [{ ...M, functionName: "claim", args: [MARKET_ID] }]),
+      action: () => send("User1 claims", "user1", [{ ...M, functionName: "claim", args: [id] }]),
     },
     {
       n: 11, who: "user2", title: "User2 claims",
       detail: u2Claimable > 0n ? `Claimable ${fmtUsdg(u2Claimable)} USDG.` : "NO lost, so there is nothing to claim. The contract would revert NothingToClaim.",
       done: !!p2?.claimed || (!!mk?.resolved && u2Claimable === 0n),
       disabledNote: mk?.resolved && u2Claimable === 0n ? "nothing to claim" : undefined,
-      action: () => send("User2 claims", "user2", [{ ...M, functionName: "claim", args: [MARKET_ID] }]),
+      action: () => send("User2 claims", "user2", [{ ...M, functionName: "claim", args: [id] }]),
     },
     {
       n: 12, who: "keeper", title: "Flatten vault + end cycle", detail: "Sells NVDA at $182 (within 50 bps of the mark), books realized PnL, accrues a 10% perf fee.",

@@ -36,11 +36,11 @@ function niceTicks(lo: number, hi: number): number[] {
 const usd = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
- * NVDA/USD Chainlink rounds as a step line (a round's price holds until the next round).
+ * A Stock Token's Chainlink rounds (e.g. NVDA/USD) as a step line (a round's price holds until the next round).
  * Vespers (cash closed, regular hours) is shaded. Crosshair + tooltip on hover/focus,
  * plus a table view, so no value is hover-only.
  */
-export function RoundsChart({ points, now }: { points: RoundPoint[]; now: number }) {
+export function RoundsChart({ points, now, symbol = "NVDA" }: { points: RoundPoint[]; now: number; symbol?: string }) {
   const { ref, w } = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
 
@@ -103,7 +103,7 @@ export function RoundsChart({ points, now }: { points: RoundPoint[]; now: number
           height={H}
           className="block touch-none outline-none"
           role="img"
-          aria-label={`NVDA/USD Chainlink rounds, ${pts.length} points${pts.length ? `, latest ${usd(pts[pts.length - 1].v)}` : ""}`}
+          aria-label={`${symbol}/USD Chainlink rounds, ${pts.length} points${pts.length ? `, latest ${usd(pts[pts.length - 1].v)}` : ""}`}
           tabIndex={0}
           onPointerMove={(e) => onMove(e.clientX, e.currentTarget.getBoundingClientRect())}
           onPointerLeave={() => setHover(null)}
@@ -178,7 +178,7 @@ export function RoundsChart({ points, now }: { points: RoundPoint[]; now: number
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-2">
-            <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: LINE }} /> NVDA/USD mark (Chainlink rounds)
+            <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: LINE }} /> {symbol}/USD mark (Chainlink rounds)
           </span>
           <span className="inline-flex items-center gap-2">
             <svg width="14" height="10" aria-hidden>

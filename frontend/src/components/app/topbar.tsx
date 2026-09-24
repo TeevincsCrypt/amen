@@ -6,8 +6,8 @@ import { ConnectButton } from "@/components/connect-button";
 import { SessionChip } from "@/components/session-chip";
 import { Logo } from "@/components/logo";
 import { APP_NAV } from "./sidebar";
-import { useChainNow, useSession } from "@/lib/hooks";
-import { fmtAge, fmtUsd18 } from "@/lib/format";
+import { useSession } from "@/lib/hooks";
+import { fmtUsd18 } from "@/lib/format";
 import { activeChain, isLocal, isMainnet } from "@/lib/chains";
 import { cn } from "@/lib/utils";
 
@@ -22,8 +22,6 @@ function Chip({ children, className }: { children: React.ReactNode; className?: 
 export function Topbar() {
   const path = usePathname();
   const s = useSession();
-  const now = useChainNow();
-  const age = s.markUpdatedAt && now ? now - Number(s.markUpdatedAt) : undefined;
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
       <div className="flex h-14 items-center gap-3 px-4 md:px-6">
@@ -37,13 +35,17 @@ export function Topbar() {
             <span className="font-mono text-[10.5px] opacity-70">{activeChain.id}</span>
           </Chip>
           {isMainnet && <Chip className="border-primary/30 bg-primary/10 text-primary">Guarded beta</Chip>}
-          <Chip>
-            NVDA/USD <span className="font-mono text-foreground">{fmtUsd18(s.markPrice)}</span>
-          </Chip>
-          <Chip className="hidden sm:inline-flex">
-            Feed <span className="font-mono text-foreground">{age !== undefined ? fmtAge(age) : "—"}</span>
-          </Chip>
           <SessionChip />
+          {/* Ticker tape: every listed Stock Token with its live Chainlink mark. */}
+          {s.stocks.map((st) => (
+            <Link key={st.token} href="/app/markets" title={st.mark?.frozen ? `${st.symbol}: frozen (${st.mark.freezeReason})` : `${st.symbol}/USD Chainlink mark`}>
+              <Chip className="hover:text-foreground">
+                <span className={cn("h-1.5 w-1.5 rounded-full", st.mark?.frozen ? "bg-destructive" : "bg-up")} />
+                <span className="font-medium text-foreground">{st.symbol}</span>
+                <span className="font-mono">{fmtUsd18(st.mark?.priceUsd)}</span>
+              </Chip>
+            </Link>
+          ))}
         </div>
         <ConnectButton />
       </div>

@@ -3,8 +3,8 @@ import { bytes32ToString } from "./format";
 
 const HUMAN: Record<string, string> = {
   VespersInventoryLocked:
-    "The vault holds NVDA during Vespers. Its weekend mark may be stale, so deposits and withdrawals reopen after the next flatten.",
-  CashOpenFlattenRequired: "There isn't enough free USDG in the vault yet. The keeper has to flatten the NVDA inventory first.",
+    "The vault holds stock inventory during Vespers. Its weekend mark may be stale, so deposits and withdrawals reopen after the next flatten.",
+  CashOpenFlattenRequired: "There isn't enough free USDG in the vault yet. The keeper has to flatten the stock inventory first.",
   OracleFrozen: "The oracle is frozen, so this action is paused until the feed is healthy.",
   NotVespers: "Only allowed while US cash is closed (Vespers).",
   CashClosed: "Only allowed while US cash is open.",
@@ -26,7 +26,7 @@ const HUMAN: Record<string, string> = {
   InventoryCapExceeded: "This would exceed the vault's max inventory (maxInventoryBps).",
   PriceDeviation: "The swap price deviates too far from the oracle mark.",
   NoActiveCycle: "Start a Vespers cycle first.",
-  NotFlat: "The vault must be flat (no NVDA) for this.",
+  NotFlat: "The vault must be flat (no stock held) for this.",
   CycleActive: "A cycle is already active.",
   WrongChain: "Wrong chain. Amen runs only on Robinhood Chain.",
   ERC4626ExceededMaxDeposit: "The vault's beta deposit cap is reached (or this would exceed it). Try a smaller amount.",

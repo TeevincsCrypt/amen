@@ -8,7 +8,7 @@ import { EligibilityStrip } from "@/components/eligibility";
 export const metadata: Metadata = {
   title: "Amen · the after-hours venue for Robinhood Stock Tokens",
   description:
-    "Get paid to take the other side of overnight NVDA. Vespers Vault and Amen Market on Robinhood Chain. Not for US persons.",
+    "Get paid to take the other side of overnight stocks. Gap markets on every listed Robinhood Stock Token, plus the Vespers Vault, on Robinhood Chain. Not for US persons.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

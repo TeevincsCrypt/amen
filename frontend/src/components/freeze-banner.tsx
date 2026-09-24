@@ -8,22 +8,22 @@ import { Loader2, RotateCcw, Send, Snowflake } from "lucide-react";
 import { useSession } from "@/lib/hooks";
 import { isLocal } from "@/lib/chains";
 import { decodeError } from "@/lib/errors";
-import { demoRewind, demoSend, PRINT_182 } from "@/lib/demo-actions";
+import { demoPrintOpen, demoRewind } from "@/lib/demo-actions";
 import { Button } from "@/components/ui/button";
 
 const EXPLAIN: Record<string, string> = {
   STALE:
-    "US cash is open but the NVDA Chainlink feed hasn't updated in over 30 minutes. Amen won't price anything off a stale mark while the market is trading.",
-  PAUSED: "The Stock Token reports oraclePaused() = true, so Amen has stopped trusting its price.",
+    "US cash is open but the Chainlink stock feeds haven't updated in over 30 minutes. Amen won't price anything off a stale mark while the market is trading.",
+  PAUSED: "The Stock Tokens report oraclePaused() = true, so Amen has stopped trusting their prices.",
   NONPOSITIVE: "The feed returned a price of zero or less.",
   FEED_ERROR: "The price feed call failed or returned invalid data.",
   MANUAL: "The protocol owner has frozen Amen (emergency switch).",
 };
 
 /**
- * Demo chain only: the mock feed updates only when the demo publishes a price, so a STALE
+ * Demo chain only: the mock feeds update only when the demo publishes prices, so a STALE
  * freeze at Monday's open (step 7) or ~30 min after the last print is expected. Offer the two
- * ways out right here: publish a fresh price (the step-8 action), or rewind the demo to Friday.
+ * ways out right here: publish fresh prices (the step-8 action), or rewind the demo to Friday.
  */
 function DemoRecovery({ reason, compact = false }: { reason: string; compact?: boolean }) {
   const client = usePublicClient();
@@ -46,9 +46,9 @@ function DemoRecovery({ reason, compact = false }: { reason: string; compact?: b
   const buttons = (
     <>
       {stale && (
-        <Button size={compact ? "sm" : "default"} disabled={!!busy || !client} onClick={() => run("print", () => demoSend(client!, "owner", PRINT_182))}>
+        <Button size={compact ? "sm" : "default"} disabled={!!busy || !client} onClick={() => run("print", () => demoPrintOpen(client!))}>
           {busy === "print" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          Publish a fresh $182.00 price
+          Publish fresh prices
         </Button>
       )}
       <Button size={compact ? "sm" : "default"} variant="outline" disabled={!!busy || !client} onClick={() => run("rewind", () => demoRewind(client!))}>
@@ -71,11 +71,11 @@ function DemoRecovery({ reason, compact = false }: { reason: string; compact?: b
     <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/[0.06] p-4 text-left">
       <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Demo chain · this freeze is expected</p>
       <p className="text-sm text-foreground/90">
-        The mock NVDA feed only updates when the demo publishes a price.
+        The mock price feeds only update when the demo publishes prices.
         {stale ? (
           <>
             {" "}
-            Just ran <strong className="font-medium">step 7</strong> (warp to Monday)? Publish Monday&apos;s price to continue.
+            Just ran <strong className="font-medium">step 7</strong> (warp to Monday)? Publish Monday&apos;s prices to continue.
             Finished the demo a while ago? Rewind to Friday to start over.
           </>
         ) : (
@@ -118,8 +118,8 @@ export function FreezeBanner() {
         <h2 className="text-3xl font-semibold tracking-tight">Amen is not quoting.</h2>
         <p className="text-muted-foreground">{EXPLAIN[reason] ?? "The oracle reported bad data."}</p>
         <p className="text-sm text-muted-foreground">
-          While frozen: no new market positions, no vault swaps, and no resolution. The vault locks if it holds NVDA (or
-          during a cash-open freeze). Markets that can&apos;t resolve within 60 minutes of their resolve time become voidable,
+          While frozen: no new market positions, no vault swaps, and no resolution. The vault locks if it holds its Stock
+          Token (or during a cash-open freeze). Markets that can&apos;t resolve within 60 minutes of their resolve time become voidable,
           and every stake is refunded 1:1. Your balances are not affected.
         </p>
         {isLocal && <DemoRecovery reason={reason} />}

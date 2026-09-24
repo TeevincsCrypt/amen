@@ -246,6 +246,24 @@ contract AmenOracleTest is AmenTestBase {
         oracle.getMark(alice);
     }
 
+    // ───────────── stock registry ─────────────
+
+    function test_StockRegistryListsEachStockOnce() public {
+        assertEq(oracle.stockCount(), 1);
+        assertEq(oracle.allStocks()[0], address(nvda));
+        MockStockTokenNoPause aapl = new MockStockTokenNoPause();
+        MockAggregator aaplFeed = new MockAggregator(8, "AAPL / USD");
+        vm.startPrank(owner);
+        oracle.setFeed(address(aapl), address(aaplFeed));
+        oracle.setFeed(address(nvda), address(aaplFeed)); // replacing a feed must not duplicate the stock
+        vm.stopPrank();
+        address[] memory all = oracle.allStocks();
+        assertEq(all.length, 2);
+        assertEq(all[0], address(nvda));
+        assertEq(all[1], address(aapl));
+        assertEq(oracle.feedOf(address(nvda)), address(aaplFeed));
+    }
+
     // ───────────── official closes ─────────────
 
     function test_RecordClose_Permissionless() public {

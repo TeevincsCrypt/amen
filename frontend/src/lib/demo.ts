@@ -27,4 +27,3 @@ export const T = {
 };
 
 export const SESSION_ID = 20721n; // Fri 2026-09-25 (UTC day index)
-export const MARKET_ID = 1n;

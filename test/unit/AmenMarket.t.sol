@@ -6,6 +6,8 @@ import {ReentrantUSDG} from "../utils/ReentrantUSDG.sol";
 import {AmenMarket} from "../../src/AmenMarket.sol";
 import {Errors} from "../../src/libraries/Errors.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MockStockToken} from "../../src/mocks/MockStockToken.sol";
+import {MockAggregator} from "../../src/mocks/MockAggregator.sol";
 
 contract AmenMarketTest is AmenTestBase {
     AmenMarket market;
@@ -234,6 +236,41 @@ contract AmenMarketTest is AmenTestBase {
         assertEq(m.resolveReason, market.REASON_ONE_SIDED());
         vm.prank(alice);
         assertEq(market.claim(id), 50e6);
+    }
+
+    // ───────────── multiple tickers ─────────────
+
+    function test_TwoTickersSettleIndependently() public {
+        MockStockToken aapl = new MockStockToken("Apple Stock Token", "AAPL");
+        MockAggregator aaplFeed = new MockAggregator(8, "AAPL / USD");
+        vm.startPrank(owner);
+        oracle.setFeed(address(aapl), address(aaplFeed));
+        market.setStockAllowed(address(aapl), true);
+        vm.stopPrank();
+        // AAPL Friday close $230 (NVDA's $180 close was recorded in setUp)
+        aaplFeed.pushRound(230_00000000, utc(2026, 9, 25, 19, 56));
+        oracle.recordSessionClose(address(aapl));
+
+        uint256 nv = _gap(100);
+        vm.prank(keeper);
+        uint256 ap = market.createGapMarket(address(aapl), fri, 100, 0, 100_000e6);
+        _buy(alice, nv, true, 100e6);
+        _buy(bob, nv, false, 100e6);
+        _buy(alice, ap, true, 100e6);
+        _buy(bob, ap, false, 100e6);
+
+        vm.warp(monOpen + 1 minutes);
+        tick(182_00000000); // NVDA +1.11% -> YES
+        aaplFeed.setAnswer(230_50000000); // AAPL +0.22% -> NO
+        vm.warp(monOpen + 5 minutes);
+        market.resolve(nv);
+        market.resolve(ap);
+
+        assertTrue(market.getMarket(nv).yesWins);
+        assertFalse(market.getMarket(ap).yesWins);
+        assertEq(market.getMarket(ap).closeMarkPrice, 230e18);
+        assertEq(market.getMarket(ap).stockToken, address(aapl));
+        assertEq(oracle.allStocks().length, 2);
     }
 
     // ───────────── trading rules ─────────────

@@ -3,18 +3,18 @@
 This is an unaudited Phase 1 MVP. It is not deployed to mainnet.
 
 ## 1. Oracle pause
-If NVDA's `oraclePaused()` returns true, the mark is **frozen (PAUSED)**:
-- no vault swaps;
-- no new market positions;
-- no resolution;
-- no vault deposits or withdrawals while the vault holds NVDA.
+If a listed Stock Token's `oraclePaused()` returns true, that ticker's mark is **frozen (PAUSED)**:
+- no new positions in its markets, and no resolution of them;
+- if it's the vault's stock (NVDA in the beta): no vault swaps, and no deposits or withdrawals while the vault holds it.
 
-A market that can't resolve within 60 minutes of its resolve time can be voided by anyone, and every stake is refunded 1:1 with no fee. The owner also has a manual freeze. Price ≤ 0 and feed errors freeze the mark the same way.
+Other tickers keep working: every mark is per stock. A market that can't resolve within 60 minutes of its resolve time can be voided by anyone, and every stake is refunded 1:1 with no fee. The owner also has a manual freeze, which stops every ticker. Price ≤ 0 and feed errors freeze the mark the same way.
+
+**Listing risk.** Each new ticker is an owner decision: a wrong token or feed address would price that ticker's markets wrongly. `script/check-stock.sh` checks the token's decimals and `uiMultiplier`, and the feed's decimals, description and latest answer, before listing. Only list addresses taken from the official Robinhood and Chainlink pages.
 
 ## 2. Stale Sunday feed
 Chainlink Stock Token feeds update about 24/5, so a Friday price can still be the latest mark on Sunday.
 - **During Vespers** a stale feed is expected and does **not** freeze Amen. But it is never used to settle: resolution needs the first round printed *during the cash session* at or after the resolve time.
-- **While the vault holds NVDA during Vespers**, deposits and withdrawals are locked. Otherwise LPs could trade against a known-stale NAV. LPs exit in USDG after the flatten at the open.
+- **While the vault holds stock during Vespers**, deposits and withdrawals are locked. Otherwise LPs could trade against a known-stale NAV. LPs exit in USDG after the flatten at the open.
 - **At the open**, a feed older than 30 minutes freezes the mark (STALE) until the next print.
 
 ## 3. Keeper, 50 bps

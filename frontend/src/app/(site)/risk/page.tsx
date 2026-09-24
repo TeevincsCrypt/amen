@@ -17,9 +17,10 @@ const SECTIONS: { h: string; p: string[] }[] = [
     h: "Oracle risk",
     p: [
       "Prices come from Chainlink Stock Token feeds on Robinhood Chain. Those feeds already account for corporate actions, so Amen never multiplies the price by the UI multiplier.",
-      "A token can report oraclePaused(). When it does, Amen freezes: no vault swaps, no new market positions and no resolution.",
-      "A price of zero or less, or a feed call that fails, also freezes Amen.",
-      "While US cash is open, a feed older than 30 minutes freezes Amen.",
+      "Every listed ticker has its own Chainlink feed and freezes on its own. A problem with one feed stops that ticker only; the owner's emergency switch stops everything.",
+      "A token can report oraclePaused(). When it does, Amen freezes that ticker: no vault swaps in it, no new positions in its markets and no resolution.",
+      "A price of zero or less, or a feed call that fails, also freezes the ticker.",
+      "While US cash is open, a feed older than 30 minutes freezes the ticker.",
     ],
   },
   {
@@ -27,15 +28,15 @@ const SECTIONS: { h: string; p: string[] }[] = [
     p: [
       "Equity feeds update roughly 24/5 with US market hours. Over a weekend the last price can be days old. That is expected, so Amen doesn't freeze just because it's Saturday.",
       "A stale mark is never used to settle a market. Settlement needs the first Chainlink print during the cash session at or after the market's resolve time.",
-      "Because the weekend mark can be stale, the Vespers vault locks deposits and withdrawals while it holds NVDA during closed hours. Otherwise one LP could trade against another at a price everyone knows is old. You can exit in USDG after the next flatten.",
+      "Because the weekend mark can be stale, the Vespers vault locks deposits and withdrawals while it holds its Stock Token during closed hours. Otherwise one LP could trade against another at a price everyone knows is old. You can exit in USDG after the next flatten.",
     ],
   },
   {
     h: "Vespers Vault risks",
     p: [
-      "The vault may hold up to 50% of its NAV in NVDA while cash is closed. If NVDA gaps against that inventory at the open, LPs lose money. That is the risk LPs are paid to take.",
+      "The vault may hold up to 50% of its NAV in its Stock Token (NVDA in the beta) while cash is closed. If the stock gaps against that inventory at the open, LPs lose money. That is the risk LPs are paid to take.",
       "Inventory is moved by a keeper through a swap venue, within 0.5% (50 bps) of the oracle mark. A 10% performance fee is charged on positive realized cycle PnL. There is no management fee in Phase 1.",
-      "If the oracle is frozen while the vault holds NVDA, or during a cash-open freeze, deposits and withdrawals lock until the mark is healthy.",
+      "If the vault's stock is frozen while the vault holds it, or during a cash-open freeze, deposits and withdrawals lock until the mark is healthy.",
     ],
   },
   {

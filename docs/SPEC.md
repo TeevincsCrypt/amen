@@ -3,12 +3,14 @@
 Amen Protocol is the after-hours venue for official Robinhood Stock Tokens on
 **Robinhood Chain** (chain id 4663, testnet 46630). It has two coupled pieces:
 
-1. **Vespers Vault**: an ERC-4626-style USDG vault that holds NVDA inventory against USDG only
-   while the US cash market is closed. LPs earn the closed-market spread, minus a performance fee.
-2. **Amen Market**: defined-risk parimutuel event books on NVDA (weekend/overnight gap and
-   absolute move). Collateral is USDG. Settlement reads Chainlink with hard freeze rules.
+1. **Vespers Vault**: an ERC-4626-style USDG vault that holds one Stock Token's inventory (NVDA
+   in the beta) against USDG only while the US cash market is closed. LPs earn the closed-market
+   spread, minus a performance fee.
+2. **Amen Market**: defined-risk parimutuel event books on every listed Stock Token
+   (weekend/overnight gap and absolute move). Collateral is USDG. Settlement reads Chainlink with
+   hard freeze rules.
 
-> Pitch: *Get paid to take the other side of overnight NVDA.*
+> Pitch: *Get paid to take the other side of overnight stocks.*
 
 ---
 
@@ -48,6 +50,12 @@ before use:
 | USDG (Paxos Global Dollar) | `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` | **6** |
 | NVDA Stock Token | `0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC` | 18 |
 | NVDA/USD Chainlink | `0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15` | read `decimals()` live (typically 8) |
+| AAPL Stock Token / feed | `0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9` / `0x6B22A786bAa607d76728168703a39Ea9C99f2cD0` | 18 / live |
+| SPY Stock Token / feed | `0x117cc2133c37B721F49dE2A7a74833232B3B4C0C` / `0x319724394D3A0e3669269846abE664Cd621f9f6A` | 18 / live |
+
+The listed tickers live in `config/stocks-4663.json`. Any other Stock Token with a Chainlink
+feed can be listed the same way (`script/check-stock.sh`, then `oracle.setFeed` and
+`market.setStockAllowed` from the owner).
 | Uniswap V3 Factory | `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA` | – |
 
 ## 2. Stock Token and oracle pitfalls (read before touching the code)
@@ -98,7 +106,13 @@ before use:
 
 ## 4. AmenOracle
 
+**Ticker registry.** The owner lists a Stock Token with `setFeed(stock, feed)`. `allStocks()`
+returns every Stock Token that has ever had a feed set, once each, in registration order
+(`stockCount()` is its length). Clients show the ones `AmenMarket.stockAllowed` accepts, so a
+new ticker needs no code change anywhere.
+
 `getMark(stock)` returns `Mark{priceUsd(1e18), updatedAt, roundId, cashOpen, frozen, freezeReason}`.
+Every mark is per stock: a stale or paused feed freezes that ticker only. `MANUAL` freezes all.
 When several freeze reasons apply, they take this priority:
 
 `MANUAL` (owner) > `FEED_ERROR` (call reverts or future timestamp) > `PAUSED` (`oraclePaused()`)
@@ -151,7 +165,8 @@ Both market kinds are parimutuel binaries on USDG. **Conservative interpretation
   The fee accrues to `feeRecipient` and is pulled, never pushed, so a USDG-frozen fee address
   cannot block `resolve`. Rounding dust stays in the contract.
 - **Creation** is by the owner or a keeper only. Only allow-listed stocks are accepted
-  (Phase 1: NVDA).
+  (`stockAllowed`; NVDA, AAPL and SPY at launch). Each market settles on its own stock's feed
+  and freezes only on its own stock's mark (plus the global manual freeze).
 
 ## 6. VespersVault rules
 

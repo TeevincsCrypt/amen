@@ -1,9 +1,11 @@
 // Amen Protocol keeper.
 //
 // Runs the protocol's routine, time-driven jobs so markets don't void for lack of a caller:
+// for every Stock Token listed on the oracle (discovered on-chain, so new tickers are picked up
+// automatically) and allowed on the market:
 //   1. record the official close after the 16:00 New York bell (the last Chainlink round at or
 //      before the bell, within 30 min);
-//   2. create the NVDA gap market for that close (weekend closes by default);
+//   2. create the gap market for that close (weekend closes by default);
 //   3. resolve each market with the first cash-session round at or after its resolve time,
 //      or void it once the 60-minute window has passed (so stakes can be refunded);
 //   4. keep Vespers Vault cycle books (start at the close, end at the open when flat).
@@ -34,6 +36,8 @@ const MARKET_NOTIONAL_USDG = env("MARKET_NOTIONAL_USDG", ""); // default: the co
 const MIN_TRADING_WINDOW_SEC = Number(env("MIN_TRADING_WINDOW_SEC", "3600"));
 const VAULT_CYCLES = env("VAULT_CYCLES", "on") === "on";
 const MAX_ROUND_WALK = Number(env("MAX_ROUND_WALK", "600"));
+// Optional comma-separated symbols to auto-create markets for (default: every allowed ticker).
+const MARKET_TICKERS = env("MARKET_TICKERS", "").toUpperCase().split(",").map((x) => x.trim()).filter(Boolean);
 const PORT = env("PORT", "");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -46,7 +50,7 @@ function loadDeployment() {
     // fall back to env-only config
   }
   const pick = (k, e) => env(e, d[k]);
-  const out = { oracle: pick("oracle", "ORACLE"), market: pick("market", "MARKET"), vault: pick("vault", "VAULT"), nvda: pick("nvda", "NVDA") };
+  const out = { oracle: pick("oracle", "ORACLE"), market: pick("market", "MARKET"), vault: pick("vault", "VAULT") };
   for (const [k, v] of Object.entries(out)) if (!v) throw new Error(`missing ${k} address (deployments/${CHAIN_ID}.json or env ${k.toUpperCase()})`);
   return out;
 }
@@ -76,6 +80,7 @@ const oracleAbi = parseAbi([
   "function latestRoundId(address) view returns (uint80)",
   "function getRoundMark(address,uint80) view returns (bool ok, uint256 priceUsd, uint256 updatedAt)",
   "function getMark(address) view returns ((uint256 priceUsd, uint256 updatedAt, uint80 roundId, bool cashOpen, bool frozen, bytes32 freezeReason))",
+  "function allStocks() view returns (address[])",
   "function isKeeper(address) view returns (bool)",
   "function recordSessionClose(address)",
   "function recordSessionCloseAtRound(address,uint80)",
@@ -89,6 +94,7 @@ const oracleAbi = parseAbi([
 const marketAbi = parseAbi([
   "function marketCount() view returns (uint256)",
   "function maxNotionalLimit() view returns (uint256)",
+  "function stockAllowed(address) view returns (bool)",
   "function getMarket(uint256) view returns ((uint256 id, uint8 kind, address stockToken, uint256 strikeBps, uint256 closeMarkPrice, uint256 closeMarkTs, uint256 startTs, uint256 endTs, uint256 resolveEarliestTs, uint256 yesPool, uint256 noPool, bool resolved, bool yesWins, bool voided, bytes32 resolveReason, uint256 sessionId, uint256 maxNotional, uint256 takerFeeBps, uint256 resolvePrice, uint256 resolveMarkTs, uint80 resolveRoundId, uint256 moveBps))",
   "function createGapMarket(address,uint256,uint256,uint256,uint256) returns (uint256)",
   "function resolveWithRound(uint256,uint80)",
@@ -117,6 +123,8 @@ const vaultAbi = parseAbi([
   "error CashClosed()",
   "error OracleFrozen(bytes32 reason)",
 ]);
+
+const erc20Abi = parseAbi(["function symbol() view returns (string)"]);
 
 const RESOLVE_WINDOW = 3600n;
 const CLOSE_LOOKBACK = 1800n;
@@ -163,33 +171,55 @@ async function write(label, address, abi, functionName, args = []) {
 }
 
 /** Round data via the oracle (price normalized to 18 dec); null if the round is missing or invalid. */
-async function round(rid) {
+async function round(stock, rid) {
   if (rid <= 0n) return null;
-  const [ok, price, upd] = await read(D.oracle, oracleAbi, "getRoundMark", [D.nvda, rid]);
+  const [ok, price, upd] = await read(D.oracle, oracleAbi, "getRoundMark", [stock, rid]);
   return ok ? { rid, price, upd } : null;
 }
 
 // ───────────────────────────── jobs ─────────────────────────────
 
+const symbols = new Map();
+/** Listed and market-allowed Stock Tokens, with their symbols (cached). */
+async function listedStocks() {
+  const all = await read(D.oracle, oracleAbi, "allStocks");
+  const out = [];
+  for (const token of all) {
+    if (!(await read(D.market, marketAbi, "stockAllowed", [token]))) continue;
+    if (!symbols.has(token)) symbols.set(token, await read(token, erc20Abi, "symbol").catch(() => token.slice(0, 8)));
+    out.push({ token, symbol: symbols.get(token) });
+  }
+  return out;
+}
+
 /** 1. Record the official close: the last round at or before the bell, within 30 minutes. */
-async function jobRecordClose(now) {
+async function jobRecordClose(now, stocks) {
   if (await read(D.oracle, oracleAbi, "isCashOpen")) return;
   const [sid, closeTs] = await read(D.oracle, oracleAbi, "lastCloseAt", [now]);
-  if (await read(D.oracle, oracleAbi, "hasOfficialClose", [D.nvda, sid])) return;
+  for (const { token, symbol } of stocks) {
+    try {
+      await recordCloseFor(token, symbol, sid, closeTs);
+    } catch (e) {
+      log("ERROR", `${symbol}: record close: ${reason(e)}`);
+    }
+  }
+}
 
-  const latest = await read(D.oracle, oracleAbi, "latestRoundId", [D.nvda]);
+async function recordCloseFor(stock, symbol, sid, closeTs) {
+  if (await read(D.oracle, oracleAbi, "hasOfficialClose", [stock, sid])) return;
+  const latest = await read(D.oracle, oracleAbi, "latestRoundId", [stock]);
   let rid = latest;
-  let r = await round(rid);
+  let r = await round(stock, rid);
   for (let i = 0; r && r.upd > closeTs && i < MAX_ROUND_WALK; i++) {
     rid -= 1n;
-    r = await round(rid);
+    r = await round(stock, rid);
   }
   if (!r || r.upd > closeTs) {
-    log("WARN", "record close: could not find a round at or before the bell", { sessionId: sid, closeTs });
+    log("WARN", `${symbol}: record close: could not find a round at or before the bell`, { sessionId: sid, closeTs });
     return;
   }
   if (r.upd + CLOSE_LOOKBACK < closeTs) {
-    log("WARN", "record close: last round before the bell is older than 30 min; not recording automatically. The owner (Safe) or keeper may forceRecordSessionClose if appropriate.", {
+    log("WARN", `${symbol}: record close: last round before the bell is older than 30 min; not recording automatically. The owner (Safe) or keeper may forceRecordSessionClose if appropriate.`, {
       sessionId: sid,
       roundId: r.rid,
       updatedAt: r.upd,
@@ -197,12 +227,12 @@ async function jobRecordClose(now) {
     });
     return;
   }
-  if (r.rid === latest) await write(`record close (session ${sid}, latest round ${r.rid})`, D.oracle, oracleAbi, "recordSessionClose", [D.nvda]);
-  else await write(`record close (session ${sid}, round ${r.rid})`, D.oracle, oracleAbi, "recordSessionCloseAtRound", [D.nvda, r.rid]);
+  if (r.rid === latest) await write(`${symbol}: record close (session ${sid}, latest round ${r.rid})`, D.oracle, oracleAbi, "recordSessionClose", [stock]);
+  else await write(`${symbol}: record close (session ${sid}, round ${r.rid})`, D.oracle, oracleAbi, "recordSessionCloseAtRound", [stock, r.rid]);
 }
 
 /** Markets whose resolve window could still matter (newest first). */
-async function recentMarkets(limit = 25) {
+async function recentMarkets(limit = 50) {
   const count = await read(D.market, marketAbi, "marketCount");
   const out = [];
   for (let id = count; id >= 1n && out.length < limit; id--) out.push(await read(D.market, marketAbi, "getMarket", [id]));
@@ -210,37 +240,37 @@ async function recentMarkets(limit = 25) {
 }
 
 /** 2. Create the gap market for the latest recorded close (weekend closes by default). */
-async function jobCreateMarket(now, markets) {
+async function jobCreateMarket(now, markets, stocks) {
   if (MARKET_SCHEDULE === "off") return;
   if (await read(D.oracle, oracleAbi, "isCashOpen")) return;
   const [sid, closeTs] = await read(D.oracle, oracleAbi, "lastCloseAt", [now]);
-  if (!(await read(D.oracle, oracleAbi, "hasOfficialClose", [D.nvda, sid]))) return;
-  if (markets.some((m) => m.sessionId === sid && m.kind === 0)) return;
   const nextOpen = await read(D.oracle, oracleAbi, "nextOpenAfter", [closeTs]);
   if (MARKET_SCHEDULE === "weekend" && nextOpen - closeTs < 86_400n) return; // overnight only: not a weekend/holiday gap
-  if (nextOpen - now < BigInt(MIN_TRADING_WINDOW_SEC)) {
-    log("INFO", "create market: too close to the open to be worth trading; skipping", { sessionId: sid, nextOpen });
-    return;
-  }
+  if (nextOpen - now < BigInt(MIN_TRADING_WINDOW_SEC)) return; // too close to the open to be worth trading
   const limit = await read(D.market, marketAbi, "maxNotionalLimit");
   const wanted = MARKET_NOTIONAL_USDG ? BigInt(Math.round(Number(MARKET_NOTIONAL_USDG) * 1e6)) : limit;
   const notional = wanted < limit ? wanted : limit;
-  await write(`create gap market (session ${sid}, ${Number(STRIKE_BPS) / 100}%, cap ${Number(notional) / 1e6} USDG)`, D.market, marketAbi, "createGapMarket", [
-    D.nvda,
-    sid,
-    STRIKE_BPS,
-    0n,
-    notional,
-  ]);
+  for (const { token, symbol } of stocks) {
+    if (MARKET_TICKERS.length && !MARKET_TICKERS.includes(String(symbol).toUpperCase())) continue;
+    if (markets.some((m) => m.sessionId === sid && m.kind === 0 && m.stockToken.toLowerCase() === token.toLowerCase())) continue;
+    if (!(await read(D.oracle, oracleAbi, "hasOfficialClose", [token, sid]))) continue;
+    await write(`${symbol}: create gap market (session ${sid}, ${Number(STRIKE_BPS) / 100}%, cap ${Number(notional) / 1e6} USDG)`, D.market, marketAbi, "createGapMarket", [
+      token,
+      sid,
+      STRIKE_BPS,
+      0n,
+      notional,
+    ]);
+  }
 }
 
 /** First round with updatedAt >= earliest whose predecessor is < earliest (what the contract requires). */
-async function firstRoundAtOrAfter(earliest) {
-  let rid = await read(D.oracle, oracleAbi, "latestRoundId", [D.nvda]);
-  let r = await round(rid);
+async function firstRoundAtOrAfter(stock, earliest) {
+  let rid = await read(D.oracle, oracleAbi, "latestRoundId", [stock]);
+  let r = await round(stock, rid);
   if (!r || r.upd < earliest) return null; // nothing published since the resolve time yet
   for (let i = 0; i < MAX_ROUND_WALK; i++) {
-    const prev = await round(rid - 1n);
+    const prev = await round(stock, rid - 1n);
     if (!prev) return null; // phase boundary or bad data: can't prove it; the market will void
     if (prev.upd < earliest) return r;
     rid -= 1n;
@@ -253,27 +283,29 @@ async function firstRoundAtOrAfter(earliest) {
 async function jobSettle(now, markets) {
   for (const m of markets) {
     if (m.resolved || m.voided) continue;
+    const stock = m.stockToken;
+    const sym = symbols.get(stock) ?? stock.slice(0, 8);
     const earliest = m.resolveEarliestTs;
     if (now < earliest) continue;
     if (now > earliest + RESOLVE_WINDOW) {
-      await write(`void market #${m.id} (no resolve within 60 min)`, D.market, marketAbi, "voidMarket", [m.id]);
+      await write(`${sym}: void market #${m.id} (no resolve within 60 min)`, D.market, marketAbi, "voidMarket", [m.id]);
       continue;
     }
-    const mark = await read(D.oracle, oracleAbi, "getMark", [D.nvda]);
+    const mark = await read(D.oracle, oracleAbi, "getMark", [stock]);
     if (mark.frozen) {
-      log("WAIT", `market #${m.id}: oracle frozen (${Buffer.from(mark.freezeReason.slice(2), "hex").toString().replace(/\0/g, "")}); retrying`);
+      log("WAIT", `${sym}: market #${m.id}: oracle frozen (${Buffer.from(mark.freezeReason.slice(2), "hex").toString().replace(/\0/g, "")}); retrying`);
       continue;
     }
-    const r = await firstRoundAtOrAfter(earliest);
+    const r = await firstRoundAtOrAfter(stock, earliest);
     if (!r) {
-      log("WAIT", `market #${m.id}: no cash-session print at or after the resolve time yet`);
+      log("WAIT", `${sym}: market #${m.id}: no cash-session print at or after the resolve time yet`);
       continue;
     }
     if (r.upd > earliest + RESOLVE_WINDOW || !(await read(D.oracle, oracleAbi, "isCashOpenAt", [r.upd]))) {
-      log("WARN", `market #${m.id}: first print after the resolve time is not a valid cash-session print; it will void`, { roundId: r.rid, updatedAt: r.upd });
+      log("WARN", `${sym}: market #${m.id}: first print after the resolve time is not a valid cash-session print; it will void`, { roundId: r.rid, updatedAt: r.upd });
       continue;
     }
-    await write(`resolve market #${m.id} with round ${r.rid}`, D.market, marketAbi, "resolveWithRound", [m.id, r.rid]);
+    await write(`${sym}: resolve market #${m.id} with round ${r.rid}`, D.market, marketAbi, "resolveWithRound", [m.id, r.rid]);
   }
 }
 
@@ -304,12 +336,18 @@ async function tick() {
   const block = await pub.getBlock();
   const now = block.timestamp;
   state.ticks++;
+  let stocks = [];
+  try {
+    stocks = await listedStocks();
+  } catch (e) {
+    log("ERROR", `listing stocks: ${reason(e)}`);
+  }
   for (const [name, fn] of [
-    ["record close", () => jobRecordClose(now)],
+    ["record close", () => jobRecordClose(now, stocks)],
     ["markets", async () => {
-      const markets = await recentMarkets();
-      await jobCreateMarket(now, markets);
-      await jobSettle(now, await recentMarkets());
+      const markets = await recentMarkets(Math.max(50, stocks.length * 4));
+      await jobCreateMarket(now, markets, stocks);
+      await jobSettle(now, await recentMarkets(Math.max(50, stocks.length * 4)));
     }],
     ["vault", () => jobVault()],
   ]) {
@@ -332,7 +370,8 @@ async function main() {
       read(D.market, parseAbi(["function isKeeper(address) view returns (bool)"]), "isKeeper", [account.address]),
     ]);
     const bal = await pub.getBalance({ address: account.address });
-    log("INFO", "keeper starting", { chainId, keeper: account.address, isKeeperOracle, isKeeperMarket, ethBalanceWei: bal, dryRun: DRY_RUN, schedule: MARKET_SCHEDULE });
+    const stocks = await listedStocks();
+    log("INFO", "keeper starting", { chainId, keeper: account.address, isKeeperOracle, isKeeperMarket, ethBalanceWei: bal, dryRun: DRY_RUN, schedule: MARKET_SCHEDULE, tickers: stocks.map((x) => x.symbol).join(",") });
     if (!isKeeperMarket) log("WARN", "this wallet is not a keeper on AmenMarket: market creation will be skipped (closes, resolves and voids are permissionless)");
   } else {
     log("INFO", "keeper starting in DRY_RUN without a key (read + simulate only)", { chainId });

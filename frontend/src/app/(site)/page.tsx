@@ -20,7 +20,7 @@ import { REPO_URL } from "@/components/site/site-footer";
 import { DEMO_URL, isMainnet } from "@/lib/chains";
 
 const FACTS = [
-  { value: "≤ 50%", label: "of vault NAV in NVDA, added only while US cash is closed" },
+  { value: "≤ 50%", label: "of vault NAV in stock, added only while US cash is closed" },
   { value: "50 bps", label: "max distance between a keeper swap and the oracle mark" },
   { value: "60 min", label: "to settle after the open, or every stake is refunded 1:1" },
   { value: "1%", label: "taker fee, charged only when a market actually resolves" },
@@ -31,13 +31,13 @@ const STEPS = [
     time: "16:00 ET",
     icon: Sun,
     title: "The close is recorded",
-    body: "Anyone records the last Chainlink round before the New York bell. After-hours prints are rejected, and nobody can type a price.",
+    body: "Anyone records each ticker's last Chainlink round before the New York bell. After-hours prints are rejected, and nobody can type a price.",
   },
   {
     time: "Vespers",
     icon: Moon,
-    title: "Cash is closed, NVDA isn't",
-    body: "The vault may carry NVDA inventory against USDG. Traders take YES or NO on the size of the gap, collateralized in USDG.",
+    title: "Cash is closed, the tokens aren't",
+    body: "Traders take YES or NO on each ticker's gap, collateralized in USDG. The vault may carry Stock Token inventory against USDG.",
   },
   {
     time: "09:30 ET",
@@ -48,7 +48,7 @@ const STEPS = [
 ];
 
 const SAFETY = [
-  { icon: Snowflake, title: "Oracle pause freezes everything", body: "If NVDA reports oraclePaused(), swaps, new positions and resolution stop. Balances are untouched." },
+  { icon: Snowflake, title: "Oracle pause freezes the ticker", body: "If a Stock Token reports oraclePaused(), its swaps, new positions and resolution stop. Balances are untouched." },
   { icon: Clock, title: "Stale at the open means frozen", body: "A feed older than 30 minutes during cash hours freezes the mark. A stale weekend feed is expected, and never settles anything." },
   { icon: KeyRound, title: "No round shopping", body: "Settlement uses one specific round: the first cash-session print at or after the resolve time. Who calls, and when, doesn't matter." },
   { icon: Undo2, title: "Refund over a guess", body: "No valid resolve within 60 minutes, or nobody on one side, and every stake is refunded 1:1 with no fee." },
@@ -71,14 +71,14 @@ export default function Landing() {
           <div className="space-y-7">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted-foreground">
               <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-primary" />
-              {isMainnet ? "Guarded beta · live on Robinhood Chain" : "Built for Robinhood Chain · official NVDA Stock Tokens"}
+              {isMainnet ? "Guarded beta · live on Robinhood Chain" : "Built for Robinhood Chain · official Stock Tokens"}
             </span>
             <h1 className="text-[2.6rem] font-semibold leading-[1.04] tracking-tight sm:text-6xl">
-              Get paid to take the other side of <span className="text-brand-gradient">overnight NVDA.</span>
+              Get paid to take the other side of <span className="text-brand-gradient">overnight stocks.</span>
             </h1>
             <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
-              When US cash closes, NVDA Stock Tokens keep trading on-chain. Amen gives that risk a counterparty: a USDG
-              vault that carries it, and gap markets that price it.
+              When US cash closes, Robinhood Stock Tokens keep trading on-chain. Amen gives that risk a counterparty: gap
+              markets on every listed ticker that price it, and a USDG vault that carries it.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
@@ -157,12 +157,12 @@ export default function Landing() {
                 <h3 className="text-xl font-semibold">Vespers Vault</h3>
               </div>
             </div>
-            <p className="mt-5 text-muted-foreground">Deposit USDG. The vault carries NVDA only while cash is closed and earns the closed-market spread.</p>
+            <p className="mt-5 text-muted-foreground">Deposit USDG. The vault carries one Stock Token (NVDA in the beta) only while cash is closed and earns the closed-market spread.</p>
             <ul className="mt-5 space-y-2.5 text-sm">
               {[
                 "Inventory only during Vespers, capped at 50% of NAV",
                 "Keeper swaps must land within 50 bps of the oracle mark",
-                "Entry and exit pause while NVDA is held over a stale weekend mark",
+                "Entry and exit pause while stock is held over a stale weekend mark",
                 "10% performance fee on realized cycle profit. No token, no lock-up",
               ].map((t) => (
                 <li key={t} className="flex gap-2.5">
@@ -195,7 +195,7 @@ export default function Landing() {
                 <h3 className="text-xl font-semibold">Amen Market</h3>
               </div>
             </div>
-            <p className="mt-5 text-muted-foreground">Defined-risk books on the overnight gap. Will NVDA open at least 1% away from Friday&apos;s close?</p>
+            <p className="mt-5 text-muted-foreground">Defined-risk books on the overnight gap, one per ticker. Will NVDA, AAPL or SPY open at least 1% away from Friday&apos;s close?</p>
             <ul className="mt-5 space-y-2.5 text-sm">
               {[
                 "Take YES or NO in USDG. Your max loss is your stake",
@@ -252,7 +252,7 @@ export default function Landing() {
         </div>
         <div className="mt-12 grid gap-10 md:grid-cols-3">
           {[
-            ["Tokens trade 24/7", "Official NVDA Stock Tokens transfer and swap on nights and weekends, while the US cash market sleeps."],
+            ["Tokens trade 24/7", "Official Stock Tokens (NVDA, AAPL, SPY and more) transfer and swap on nights and weekends, while the US cash market sleeps."],
             ["Feeds run 24/5", "Chainlink Stock Token feeds follow market hours, so the weekend mark is stale by design. Amen is built around that gap."],
             ["Native settlement", "USDG as the dollar, ERC-8056 corporate actions already priced into the feed, and a first-come sequencer with no gas auction at the open."],
           ].map(([t, b]) => (
@@ -277,7 +277,7 @@ export default function Landing() {
               <p className="text-muted-foreground">
                 {isMainnet
                   ? "Deposits and market sizes are capped while Amen is unaudited. Only use what you can afford to lose. Not available to US persons."
-                  : "The live demo runs on a public test chain with mock NVDA and USDG. No wallet, no real funds."}
+                  : "The live demo runs on a public test chain with five mock tickers (NVDA, AAPL, SPY, TSLA, MSFT) and USDG. No wallet, no real funds."}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

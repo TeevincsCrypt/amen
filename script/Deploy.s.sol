@@ -123,12 +123,23 @@ contract DeployMainnet is DeployBase {
         address feeRecipient;
     }
 
+    /// @dev Field order is alphabetical: forge decodes JSON objects with sorted keys.
+    struct StockCfg {
+        address feed;
+        string symbol;
+        address token;
+    }
+
     function run() external {
         require(block.chainid == 4663, "DeployMainnet: chainid != 4663");
         Addrs memory a = _loadAddrs();
         Launch memory l = _loadLaunch();
         Roles memory r = _loadRoles();
+        StockCfg[] memory stocks = _loadStocks();
         _checkLive(a);
+        for (uint256 i; i < stocks.length; ++i) {
+            _checkStock(stocks[i]);
+        }
 
         vm.startBroadcast();
         Core memory c = _deployCore(a.usdg, a.nvda, a.feed, r.feeRecipient, l.holidays);
@@ -137,6 +148,12 @@ contract DeployMainnet is DeployBase {
         c.market.setKeeper(r.keeper, true);
         c.vault.setDepositCap(l.depositCap);
         c.market.setFeeParams(r.feeRecipient, l.takerFeeBps, l.maxNotional);
+        // Every listed ticker gets a feed and market access. NVDA (the vault's stock) is already wired.
+        for (uint256 i; i < stocks.length; ++i) {
+            if (stocks[i].token == a.nvda) continue;
+            c.oracle.setFeed(stocks[i].token, stocks[i].feed);
+            c.market.setStockAllowed(stocks[i].token, true);
+        }
         address adapter;
         if (_adapterEnabled()) {
             adapter = address(new UniswapV3PoolAdapter(a.factory, a.feeTier));
@@ -148,6 +165,10 @@ contract DeployMainnet is DeployBase {
         vm.stopBroadcast();
 
         _verify(c, a, l, r, adapter);
+        for (uint256 i; i < stocks.length; ++i) {
+            require(c.oracle.feedOf(stocks[i].token) == stocks[i].feed, "stock feed not set");
+            require(c.market.stockAllowed(stocks[i].token), "stock not allowed");
+        }
 
         vm.serializeAddress("deployment", "owner", r.owner);
         vm.serializeAddress("deployment", "keeper", r.keeper);
@@ -159,6 +180,7 @@ contract DeployMainnet is DeployBase {
         console2.log("vault deposit cap (USDG, 6 dec):", l.depositCap);
         console2.log("max notional per market (USDG, 6 dec):", l.maxNotional);
         console2.log("holidays set:", l.holidays.length);
+        console2.log("tickers listed:", c.oracle.stockCount());
         console2.log("NEXT: from the Safe, call acceptOwnership() on oracle, vault and market");
     }
 
@@ -170,6 +192,26 @@ contract DeployMainnet is DeployBase {
         a.factory = vm.parseJsonAddress(cfg, ".uniswapV3Factory");
         a.pool = vm.parseJsonAddress(cfg, ".nvdaUsdgPool");
         a.feeTier = uint24(vm.parseJsonUint(cfg, ".uniswapFeeTier"));
+    }
+
+    function _loadStocks() internal view returns (StockCfg[] memory s) {
+        string memory json = vm.readFile(string.concat(vm.projectRoot(), "/config/stocks-4663.json"));
+        s = abi.decode(vm.parseJson(json, ".stocks"), (StockCfg[]));
+        require(s.length > 0, "no stocks listed");
+    }
+
+    /// @dev Each listed Stock Token must be a live 18-dec token with a positive Chainlink price.
+    function _checkStock(StockCfg memory s) internal view {
+        require(
+            s.token.code.length > 0 && s.feed.code.length > 0, string.concat(s.symbol, ": missing bytecode")
+        );
+        require(IStockToken(s.token).decimals() == 18, string.concat(s.symbol, ": decimals != 18"));
+        require(IStockToken(s.token).uiMultiplier() > 0, string.concat(s.symbol, ": uiMultiplier"));
+        uint8 fd = IAggregatorV3(s.feed).decimals();
+        require(fd > 0 && fd <= 18, string.concat(s.symbol, ": feed decimals"));
+        (, int256 answer,, uint256 updatedAt,) = IAggregatorV3(s.feed).latestRoundData();
+        require(answer > 0 && updatedAt > 0, string.concat(s.symbol, ": feed answer"));
+        console2.log(s.symbol, "token symbol:", IStockToken(s.token).symbol());
     }
 
     function _loadLaunch() internal view returns (Launch memory l) {
@@ -249,6 +291,15 @@ contract DeployMainnet is DeployBase {
 /// @notice Mock deploy (mocks implement uiMultiplier, balanceOfUI and oraclePaused). Seeds an NVDA
 ///         feed round at block time and demo balances for anvil accounts #0 (owner), #1 and #2.
 abstract contract DeployMocks is DeployBase {
+    /// @dev A mock Stock Token + 8-dec feed seeded at block time, registered and market-allowed.
+    function _mockTicker(Core memory c, string memory name, string memory symbol, int256 px8) internal {
+        MockStockToken t = new MockStockToken(name, symbol);
+        MockAggregator f = new MockAggregator(8, string.concat(symbol, " / USD (mock)"));
+        f.setAnswer(px8);
+        c.oracle.setFeed(address(t), address(f));
+        c.market.setStockAllowed(address(t), true);
+    }
+
     address internal constant USER1 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     address internal constant USER2 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
 
@@ -279,6 +330,12 @@ abstract contract DeployMocks is DeployBase {
             usdg.mint(demo[i], 10_000e6);
             nvda.mint(demo[i], 2e18);
         }
+
+        // More tickers (mocks), deployed last so the demo's earlier addresses never move.
+        _mockTicker(c, "Apple Stock Token (mock)", "AAPL", 230_00000000);
+        _mockTicker(c, "SPDR S&P 500 Stock Token (mock)", "SPY", 660_00000000);
+        _mockTicker(c, "Tesla Stock Token (mock)", "TSLA", 410_00000000);
+        _mockTicker(c, "Microsoft Stock Token (mock)", "MSFT", 510_00000000);
         vm.stopBroadcast();
 
         // Recorded even when not wired as the adapter, so the demo can move its price alongside the feed.

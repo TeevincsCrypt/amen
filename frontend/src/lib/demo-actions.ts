@@ -3,7 +3,7 @@
 import { createWalletClient, http, type Abi, type Address, type PublicClient } from "viem";
 import { activeChain } from "./chains";
 import { ACCOUNTS, DEMO } from "./demo";
-import { mockAggregatorAbi, mockSwapAdapterAbi } from "./contracts";
+import { amenOracleAbi, mockAggregatorAbi, mockSwapAdapterAbi, stockTokenAbi } from "./contracts";
 
 export type Who = keyof typeof ACCOUNTS;
 export type DemoCall = { address: Address; abi: Abi | readonly unknown[]; functionName: string; args?: readonly unknown[] };
@@ -30,11 +30,37 @@ export async function demoSend(client: PublicClient, who: Who, calls: DemoCall[]
   }
 }
 
-/** Step 8: the mock NVDA/USD feed prints $182.00 (8 dec) and the mock swap venue moves with it. */
-export const PRINT_182: DemoCall[] = [
-  { address: DEMO.nvdaFeed, abi: mockAggregatorAbi, functionName: "setAnswer", args: [18_200_000_000n] },
-  { address: DEMO.mockVenue, abi: mockSwapAdapterAbi, functionName: "setPrice", args: [182n * 10n ** 18n] },
-];
+/**
+ * Monday's first print for each demo ticker (8 decimals), the same values script/local-demo.sh
+ * uses. NVDA's $182.00 is +1.11% on the $180 close, so the demo's NVDA market resolves YES.
+ */
+export const OPEN_PRINTS: Record<string, bigint> = {
+  NVDA: 18_200_000_000n,
+  AAPL: 23_290_000_000n,
+  SPY: 66_120_000_000n,
+  TSLA: 40_262_000_000n,
+  MSFT: 51_150_000_000n,
+};
+
+/**
+ * Step 8 and the freeze screen: every listed mock feed publishes a new round, and the mock swap
+ * venue moves to NVDA's price. A ticker without a scripted price re-publishes its last answer,
+ * which is still a fresh round.
+ */
+export async function demoPrintOpen(client: PublicClient) {
+  const stocks = await client.readContract({ address: DEMO.oracle, abi: amenOracleAbi, functionName: "allStocks" });
+  const calls: DemoCall[] = [];
+  for (const stock of stocks) {
+    const [symbol, feed] = await Promise.all([
+      client.readContract({ address: stock, abi: stockTokenAbi, functionName: "symbol" }),
+      client.readContract({ address: DEMO.oracle, abi: amenOracleAbi, functionName: "feedOf", args: [stock] }),
+    ]);
+    const px = OPEN_PRINTS[symbol] ?? (await client.readContract({ address: feed, abi: mockAggregatorAbi, functionName: "latestRoundData" }))[1];
+    calls.push({ address: feed, abi: mockAggregatorAbi, functionName: "setAnswer", args: [px] });
+  }
+  calls.push({ address: DEMO.mockVenue, abi: mockSwapAdapterAbi, functionName: "setPrice", args: [182n * 10n ** 18n] });
+  await demoSend(client, "owner", calls);
+}
 
 /**
  * Revert to the latest Friday-16:02 snapshot, then take a fresh one for next time.

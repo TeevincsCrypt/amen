@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
-import { parseUnits, maxUint256, zeroAddress } from "viem";
+import { parseUnits, maxUint256, zeroAddress, type Address } from "viem";
 import { amenMarketAbi, amenOracleAbi, deployment, usdgAbi } from "@/lib/contracts";
 import { activeChain, isLocal } from "@/lib/chains";
-import { useBlockTs, useChainNow, useRoles, useSession, useTx } from "@/lib/hooks";
+import { useBlockTs, useChainNow, useRoles, useSession, useStock, useTx } from "@/lib/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,19 +63,47 @@ export default function MarketsPage() {
 
 function Markets() {
   const d = deployment!;
+  const { stocks } = useSession();
+  const [filter, setFilter] = useState<Address | "ALL">("ALL");
   const { data: count, isError } = useReadContract({ address: d.market, abi: amenMarketAbi, functionName: "marketCount", query: { refetchInterval: 4_000 } });
-  const ids = count ? Array.from({ length: Number(count) }, (_, i) => BigInt(Number(count) - i)) : [];
+  const n = Number(count ?? 0n);
+  const allIds = Array.from({ length: Math.min(n, 100) }, (_, i) => BigInt(n - i));
+  const { data: heads } = useReadContracts({
+    contracts: allIds.map((id) => ({ address: d.market, abi: amenMarketAbi, functionName: "getMarket" as const, args: [id] as const })),
+    query: { enabled: allIds.length > 0, refetchInterval: 8_000 },
+  });
+  const stockOf = (i: number) => (heads?.[i]?.result as { stockToken: Address } | undefined)?.stockToken?.toLowerCase();
+  const ids = filter === "ALL" ? allIds : allIds.filter((_, i) => stockOf(i) === filter.toLowerCase());
+  const countFor = (t: Address) => allIds.filter((_, i) => stockOf(i) === t.toLowerCase()).length;
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Amen Market · NVDA" title="Say amen to the gap, or don't." />
+      <PageHeader eyebrow="Amen Market" title="Say amen to the gap, or don't." />
       <p className="-mt-3 mb-2 max-w-3xl text-sm text-muted-foreground">
-        Parimutuel YES/NO books in USDG. A winner gets stake × (total pool − 1% fee) ÷ winning pool. Settlement uses the first
-        Chainlink print during the cash session at or after the resolve time. If none arrives within 60 minutes, or the oracle is
-        frozen, the market voids and every stake is refunded 1:1.
+        Parimutuel YES/NO books in USDG, one per ticker per session. A winner gets stake × (total pool − 1% fee) ÷ winning
+        pool. Settlement uses the ticker&apos;s first Chainlink print during the cash session at or after the resolve time. If
+        none arrives within 60 minutes, or that ticker&apos;s oracle is frozen, the market voids and every stake is refunded 1:1.
       </p>
 
-      <SessionAdmin />
+      <CloseTable />
+
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by ticker">
+        {[{ token: "ALL" as const, symbol: "All tickers", n: allIds.length }, ...stocks.map((st) => ({ token: st.token, symbol: st.symbol, n: countFor(st.token) }))].map((c) => (
+          <button
+            key={c.token}
+            role="tab"
+            aria-selected={filter === c.token}
+            onClick={() => setFilter(c.token)}
+            className={cn(
+              "inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-sm transition-colors",
+              filter === c.token ? "border-primary/50 bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {c.symbol}
+            <span className="font-mono text-[11px] opacity-70">{c.n}</span>
+          </button>
+        ))}
+      </div>
 
       {isError && count === undefined ? (
         <Card className="p-6 text-sm text-destructive">
@@ -83,16 +111,16 @@ function Markets() {
         </Card>
       ) : ids.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">
-          No markets yet.
+          No markets {filter === "ALL" ? "yet" : "for this ticker yet"}.
           {!isLocal && " New gap markets open after Friday's 16:00 New York close, once the official close is recorded."}
-          {isLocal && (
+          {isLocal && filter === "ALL" && (
             <>
               {" "}
-              The demo chain starts at Friday 16:02 New York, before Market #1 exists. Run steps 1–2 on the{" "}
+              The demo chain starts at Friday 16:02 New York. Run steps 1–2 on the{" "}
               <Link href="/app" className="text-foreground underline underline-offset-2">
                 overview
               </Link>{" "}
-              and it will appear here.
+              and the NVDA market will appear here.
             </>
           )}
         </Card>
@@ -103,15 +131,16 @@ function Markets() {
   );
 }
 
-/** Record the official close (permissionless) and, for keepers, create the weekend gap market. */
-function SessionAdmin() {
+/** Per-ticker official closes: anyone can record one after the bell; keepers can open the gap market. */
+function CloseTable() {
   const d = deployment!;
   const ts = useBlockTs();
   const session = useSession();
   const roles = useRoles(d.market, amenMarketAbi);
   const tx = useTx();
   const [strike, setStrike] = useState("100");
-  const [cap, setCap] = useState("10000");
+  const [cap, setCap] = useState("2000");
+  const stocks = session.stocks.filter((s) => s.allowed);
 
   const { data: last } = useReadContract({
     address: d.oracle,
@@ -124,66 +153,87 @@ function SessionAdmin() {
   const { data: reads } = useReadContracts({
     contracts:
       sessionId !== undefined
-        ? [
-            { address: d.oracle, abi: amenOracleAbi, functionName: "hasOfficialClose", args: [d.nvda, sessionId] },
-            { address: d.oracle, abi: amenOracleAbi, functionName: "officialClose", args: [d.nvda, sessionId] },
-          ]
+        ? stocks.flatMap((s) => [
+            { address: d.oracle, abi: amenOracleAbi, functionName: "hasOfficialClose" as const, args: [s.token, sessionId] as const },
+            { address: d.oracle, abi: amenOracleAbi, functionName: "officialClose" as const, args: [s.token, sessionId] as const },
+          ])
         : [],
-    query: { enabled: sessionId !== undefined, refetchInterval: 4_000 },
+    query: { enabled: sessionId !== undefined && stocks.length > 0, refetchInterval: 4_000 },
   });
-  const recorded = reads?.[0]?.result as boolean | undefined;
-  const close = reads?.[1]?.result as { priceUsd: bigint; updatedAt: bigint } | undefined;
 
   return (
     <Card>
-      <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
-          <Stat label="Last session close" value={last ? stripTz(fmtNy(last[1])) : "—"} unit={sessionId !== undefined ? `session ${sessionId}` : undefined} />
-          <Stat
-            label="Official close"
-            value={recorded ? fmtUsd18(close?.priceUsd) : "Not recorded"}
-            unit={recorded ? `feed @ ${stripTz(fmtNy(close?.updatedAt))}` : "last round ≤ 16:00, within 30 min"}
-          />
-          <div className="col-span-2 flex items-center sm:col-span-1">
-            {!recorded && !session.cashOpen && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={tx.busy}
-                onClick={() => tx.send("Record close", { address: d.oracle, abi: amenOracleAbi, functionName: "recordSessionClose", args: [d.nvda] })}
-              >
-                Record official close
-              </Button>
-            )}
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <div>
+          <p className="text-[15px] font-medium">Official closes</p>
+          <p className="text-xs text-muted-foreground">
+            Last session: {last ? stripTz(fmtNy(last[1])) : "—"} · the last Chainlink round at or before the bell, within 30 minutes.
+            Anyone can record it.
+          </p>
         </div>
-        {roles.canOperate && recorded && sessionId !== undefined && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card-raised p-2">
-            <span className="px-1 text-xs text-muted-foreground">New gap market</span>
-            <Input className="h-8 w-20" value={strike} onChange={(e) => setStrike(e.target.value)} aria-label="strike bps" />
-            <span className="font-mono text-[11px] text-muted-foreground">bps</span>
+        {roles.canOperate && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            New markets: strike
+            <Input className="h-8 w-16" value={strike} onChange={(e) => setStrike(e.target.value)} aria-label="strike bps" />
+            bps · cap
             <Input className="h-8 w-24" value={cap} onChange={(e) => setCap(e.target.value)} aria-label="max notional USDG" />
-            <span className="font-mono text-[11px] text-muted-foreground">USDG cap</span>
-            <Button
-              size="sm"
-              disabled={tx.busy}
-              onClick={() =>
-                tx.send("Create gap market", {
-                  address: d.market,
-                  abi: amenMarketAbi,
-                  functionName: "createGapMarket",
-                  args: [d.nvda, sessionId, BigInt(strike || "0"), 0n, safeParse(cap, 6)],
-                })
-              }
-            >
-              Create
-            </Button>
+            USDG
           </div>
         )}
       </div>
+      <div className="divide-y divide-border">
+        {stocks.map((st, i) => {
+          const recorded = reads?.[i * 2]?.result as boolean | undefined;
+          const close = reads?.[i * 2 + 1]?.result as { priceUsd: bigint; updatedAt: bigint } | undefined;
+          return (
+            <div key={st.token} className="grid grid-cols-[4rem_1fr_auto] items-center gap-3 px-5 py-2.5 sm:grid-cols-[4rem_8rem_1fr_auto]">
+              <span className="text-sm font-semibold">{st.symbol}</span>
+              <span className="hidden font-mono text-xs text-muted-foreground sm:block">mark {fmtUsd18(st.mark?.priceUsd)}</span>
+              <span className="font-mono text-xs">
+                {recorded ? (
+                  <>
+                    close <span className="text-foreground">{fmtUsd18(close?.priceUsd)}</span>
+                    <span className="text-muted-foreground"> · feed {fmtNyShort(close?.updatedAt)}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">close not recorded</span>
+                )}
+              </span>
+              <span className="flex justify-end gap-2">
+                {!recorded && !session.cashOpen && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={tx.busy}
+                    onClick={() => tx.send(`Record ${st.symbol} close`, { address: d.oracle, abi: amenOracleAbi, functionName: "recordSessionClose", args: [st.token] })}
+                  >
+                    Record close
+                  </Button>
+                )}
+                {roles.canOperate && recorded && sessionId !== undefined && (
+                  <Button
+                    size="sm"
+                    disabled={tx.busy}
+                    onClick={() =>
+                      tx.send(`Create ${st.symbol} gap market`, {
+                        address: d.market,
+                        abi: amenMarketAbi,
+                        functionName: "createGapMarket",
+                        args: [st.token, sessionId, BigInt(strike || "0"), 0n, safeParse(cap, 6)],
+                      })
+                    }
+                  >
+                    Create market
+                  </Button>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
       {tx.state.status !== "idle" && (
         <div className="px-5 pb-5">
-          <TxStatus state={tx.state} className="mt-0" />
+          <TxStatus state={tx.state} />
         </div>
       )}
     </Card>
@@ -214,6 +264,8 @@ function MarketCard({ id }: { id: bigint }) {
   const claimable = data?.[2]?.result as bigint | undefined;
   const allowance = (data?.[3]?.result as bigint | undefined) ?? 0n;
   const quote = data?.[4]?.result as bigint | undefined;
+  const stock = useStock(m?.stockToken);
+  const sym = stock?.symbol ?? "…";
   if (!m) return null;
 
   const total = m.yesPool + m.noPool;
@@ -245,10 +297,10 @@ function MarketCard({ id }: { id: bigint }) {
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1.5">
               <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-                #{id.toString()} · {m.kind === 0 ? "Gap close → open" : "Absolute move"}
+                <span className="text-foreground">{sym}</span> · #{id.toString()} · {m.kind === 0 ? "Gap close → open" : "Absolute move"}
               </p>
               <h3 className="text-lg font-medium leading-snug">
-                Will NVDA {m.kind === 0 ? "gap" : "move"} at least {fmtBps(m.strikeBps)} either way from {fmtUsd18(m.closeMarkPrice)}?
+                Will {sym} {m.kind === 0 ? "gap" : "move"} at least {fmtBps(m.strikeBps)} either way from {fmtUsd18(m.closeMarkPrice)}?
               </h3>
               <p className="text-[13px] text-muted-foreground">
                 YES if |first cash print at or after {fmtNy(m.resolveEarliestTs)} ÷ reference − 1| ≥ {fmtBps(m.strikeBps)}.

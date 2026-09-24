@@ -1,0 +1,8 @@
+{
+  "_comment": "Stock Tokens Amen lists on Robinhood Chain mainnet (4663). Each needs its Chainlink feed on Robinhood Chain. Check every entry with script/check-stock.sh before deploying; after launch, add tickers from the Safe (oracle.setFeed + market.setStockAllowed) and the app and keeper pick them up automatically. Sources: https://docs.robinhood.com/chain/contracts and https://reference-data-directory.vercel.app/feeds-robinhood-mainnet.json",
+  "stocks": [
+    { "symbol": "NVDA", "token": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", "feed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15" },
+    { "symbol": "AAPL", "token": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", "feed": "0x6B22A786bAa607d76728168703a39Ea9C99f2cD0" },
+    { "symbol": "SPY", "token": "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C", "feed": "0x319724394D3A0e3669269846abE664Cd621f9f6A" }
+  ]
+}

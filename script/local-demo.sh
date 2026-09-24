@@ -95,6 +95,21 @@ done
 # ── 4. Vespers ────────────────────────────────────────────────────────────
 say "warp → Fri 16:01 New York (cash closed: Vespers)"
 warp "$T_VESPERS"
+# More tickers: record their Friday closes and open their weekend gap markets, with a few bets,
+# so the market board is multi-ticker from the start. NVDA stays the scripted story below.
+say "listing the other tickers: closes + gap markets + a few bets (AAPL, SPY, TSLA, MSFT)"
+SID=$(call "$ORACLE" "lastCloseAt(uint256)(uint256,uint256)" "$(now)" | head -1 | awk '{print $1}')
+OTHER_STOCKS=()
+for t in $(call "$ORACLE" "allStocks()(address[])" | tr -d '[],'); do
+  [[ "${t,,}" == "${NVDA,,}" ]] && continue
+  OTHER_STOCKS+=("$t")
+  send $PK_OWNER "$ORACLE" "recordSessionClose(address)" "$t"
+  send $PK_OWNER "$MARKET" "createGapMarket(address,uint256,uint256,uint256,uint256)" "$t" "$SID" 100 0 10000000000
+  id=$(call "$MARKET" "marketCount()(uint256)" | awk '{print $1}')
+  send $PK_USER1 "$MARKET" "buy(uint256,bool,uint256)" "$id" true $(( (40 + id * 15) * 1000000 ))
+  send $PK_USER2 "$MARKET" "buy(uint256,bool,uint256)" "$id" false $(( (90 + id * 25) * 1000000 ))
+done
+
 SNAP=$(cast rpc --rpc-url "$RPC" evm_snapshot | tr -d '"')
 mkdir -p frontend/public
 printf '{ "snapshotId": "%s", "runId": "%s" }\n' "$SNAP" "$(date +%s)" >frontend/public/demo-snapshot.json
@@ -121,9 +136,15 @@ send $PK_OWNER "$VAULT" "buyInventory(uint256,uint256)" 40000000 0
 
 say "7. warp → Mon 09:45 New York (cash open)"
 warp "$T_MONDAY"
-say "8. mock feed prints \$182.00 (+1.11% vs close → YES)"
+say "8. mock feeds print Monday's open: NVDA \$182.00 (+1.11% vs close → YES), plus the other tickers"
 send $PK_OWNER "$FEED" "setAnswer(int256)" 18200000000
 send $PK_OWNER "$VENUE" "setPrice(uint256)" 182000000000000000000
+# AAPL +1.26%, SPY +0.18%, TSLA −1.80%, MSFT +0.29% (same prints as the UI's step 8)
+for t in "${OTHER_STOCKS[@]}"; do
+  sym=$(call "$t" "symbol()(string)" | tr -d '"')
+  case "$sym" in AAPL) px=23290000000 ;; SPY) px=66120000000 ;; TSLA) px=40262000000 ;; MSFT) px=51150000000 ;; *) continue ;; esac
+  send $PK_OWNER "$(call "$ORACLE" "feedOf(address)(address)" "$t")" "setAnswer(int256)" "$px"
+done
 
 say "9. resolve (permissionless)"
 send $PK_OWNER "$MARKET" "resolve(uint256)" "$MID"
@@ -161,6 +182,7 @@ cat <<EOF
  Taker fee    $(u6 "$(call "$MARKET" "accruedFees()(uint256)" | awk '{print $1}')") USDG accrued to feeRecipient
  Vault cycle  NAV $(u6 "${Y[3]}") → $(u6 "${Y[4]}") USDG · realized PnL $(u6 "${Y[5]}") · perf fee $(u6 "${Y[6]}") USDG
  Inventory    NVDA held $(u18 "$(call "$VAULT" "stockHeld()(uint256)" | awk '{print $1}')") (flat)
+ Tickers      $(call "$ORACLE" "stockCount()(uint256)" | awk '{print $1}') listed · $(call "$MARKET" "marketCount()(uint256)" | awk '{print $1}') markets (the non-NVDA ones are left for anyone to resolve in the UI)
 ════════════════════════════════════════════════════════════════════════════════════
 EOF
 
