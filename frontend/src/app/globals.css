@@ -2,39 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark, quiet, liturgical-modern: near-black nave, parchment text, a single gilt accent. */
+/* Amen: near-black surfaces, hairline borders, one brand accent (the logo's cyan → deep blue). */
 @layer base {
   :root {
-    --background: 30 8% 4.5%;
-    --foreground: 40 25% 88%;
-    --card: 30 7% 6.5%;
-    --card-foreground: 40 25% 88%;
-    --muted: 30 6% 12%;
-    --muted-foreground: 38 8% 55%;
-    --secondary: 30 6% 10%;
-    --secondary-foreground: 40 25% 88%;
-    --primary: 40 42% 62%;
-    --primary-foreground: 30 8% 6%;
-    --destructive: 6 52% 52%;
-    --destructive-foreground: 40 25% 94%;
-    --border: 35 8% 16%;
-    --input: 35 8% 20%;
-    --ring: 40 42% 62%;
-    --gilt: 40 48% 60%;
-    --vespers: 262 30% 70%;
-    --cash: 205 38% 66%;
-    --radius: 0.5rem;
+    --background: 240 8% 3.5%;
+    --foreground: 220 15% 95%;
+    --card: 240 6% 6%;
+    --card-raised: 240 5% 8.5%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 235 6% 58%;
+    --secondary: 240 5% 10.5%;
+    --border: 240 5% 13.5%;
+    --input: 240 5% 17%;
+    --ring: 191 88% 58%;
+    --primary: 191 88% 58%;
+    --primary-foreground: 222 70% 8%;
+    --brand-deep: 214 76% 38%;
+    --destructive: 2 74% 60%;
+    --up: 152 55% 52%;
+    --down: 26 85% 58%;
+    --radius: 0.75rem;
   }
   * {
     @apply border-border;
   }
+  html {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "tnum" 1;
-    background-image: radial-gradient(ellipse 80% 40% at 50% -10%, hsl(40 40% 50% / 0.06), transparent 70%);
-    background-attachment: fixed;
   }
   ::selection {
-    background: hsl(var(--gilt) / 0.3);
+    background: hsl(var(--primary) / 0.3);
+  }
+}
+
+@layer utilities {
+  /* The logo's drafting grid, used as a faint backdrop on the landing hero. */
+  .bg-grid {
+    background-image:
+      linear-gradient(hsl(var(--foreground) / 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--foreground) / 0.045) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .text-brand-gradient {
+    background: linear-gradient(100deg, #5cf0ff 0%, #22b9ef 45%, #2a6fd9 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .glow-brand {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25), 0 20px 80px -20px hsl(var(--primary) / 0.35);
   }
 }

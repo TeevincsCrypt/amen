@@ -1,31 +1,37 @@
 import type { Config } from "tailwindcss";
 
+const hsl = (v: string) => `hsl(var(${v}) / <alpha-value>)`;
+
 const config: Config = {
   darkMode: "class",
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        muted: { DEFAULT: "hsl(var(--muted))", foreground: "hsl(var(--muted-foreground))" },
-        card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
-        primary: { DEFAULT: "hsl(var(--primary))", foreground: "hsl(var(--primary-foreground))" },
-        secondary: { DEFAULT: "hsl(var(--secondary))", foreground: "hsl(var(--secondary-foreground))" },
-        destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
-        gilt: "hsl(var(--gilt))",
-        vespers: "hsl(var(--vespers))",
-        cash: "hsl(var(--cash))",
+        border: hsl("--border"),
+        input: hsl("--input"),
+        ring: hsl("--ring"),
+        background: hsl("--background"),
+        foreground: hsl("--foreground"),
+        muted: { DEFAULT: hsl("--muted"), foreground: hsl("--muted-foreground") },
+        card: { DEFAULT: hsl("--card"), raised: hsl("--card-raised"), foreground: hsl("--foreground") },
+        primary: { DEFAULT: hsl("--primary"), foreground: hsl("--primary-foreground") },
+        brand: { DEFAULT: hsl("--primary"), deep: hsl("--brand-deep") },
+        secondary: { DEFAULT: hsl("--secondary"), foreground: hsl("--foreground") },
+        destructive: { DEFAULT: hsl("--destructive"), foreground: hsl("--foreground") },
+        up: hsl("--up"),
+        down: hsl("--down"),
+        // Validated chart pair (dark surface): identity for USDG/NVDA and YES/NO.
+        s1: "#1A9EC6",
+        s2: "#D2732C",
       },
       fontFamily: {
-        serif: ["'Iowan Old Style'", "'Palatino Linotype'", "Palatino", "'Book Antiqua'", "Georgia", "serif"],
-        sans: ["ui-sans-serif", "system-ui", "-apple-system", "'Segoe UI'", "Roboto", "sans-serif"],
-        mono: ["ui-monospace", "'SF Mono'", "Menlo", "Consolas", "monospace"],
+        sans: ["var(--font-geist-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
-      borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
+      borderRadius: { xl: "calc(var(--radius) + 4px)", lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
+      keyframes: { "pulse-dot": { "0%,100%": { opacity: "1" }, "50%": { opacity: ".35" } } },
+      animation: { "pulse-dot": "pulse-dot 2s ease-in-out infinite" },
     },
   },
   plugins: [],

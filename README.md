@@ -35,9 +35,9 @@ forge test --match-path 'test/fork/*' --fork-url $RH_RPC -vv   # live 4663 check
 ## Local demo
 ```bash
 ./script/local-demo.sh                        # anvil 31337 → deploy → full flow → summary → rewind to Fri 16:02 NY
-cd frontend && npm install && npm run dev     # http://localhost:3000 : the same 12 steps as buttons
+cd frontend && npm install && npm run dev     # http://localhost:3000 (landing) · /app (the same 12 steps as buttons)
 ```
-The home page runs the flow as anvil dev accounts (owner #0, user1 #1, user2 #2), so no wallet is needed.
+The app overview (`/app`) runs the flow as anvil dev accounts (owner #0, user1 #1, user2 #2), so no wallet is needed.
 *Rewind to Friday 16:02* replays it. Rerun the script for a fresh chain. Needs Foundry and jq.
 
 ## Hosted demo (Vercel + Render)

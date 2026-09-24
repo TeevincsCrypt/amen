@@ -74,3 +74,18 @@ export function bytes32ToString(b: Hex | undefined): string {
 export function shortAddr(a?: string): string {
   return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "";
 }
+
+/** Compact New York time: "Mon 09:30". */
+export function fmtNyShort(ts: bigint | number | undefined): string {
+  if (ts === undefined || Number(ts) === 0) return "—";
+  const d = new Date(Number(ts) * 1000);
+  const wd = d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short" });
+  const t = d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${wd} ${t}`;
+}
+
+/** New York calendar date: "Sep 28". */
+export function fmtNyDay(ts: bigint | number | undefined): string {
+  if (ts === undefined || Number(ts) === 0) return "—";
+  return new Date(Number(ts) * 1000).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
+}

@@ -59,15 +59,15 @@ const SECTIONS: { h: string; p: string[] }[] = [
 
 export default function RiskPage() {
   return (
-    <article className="mx-auto max-w-3xl space-y-10">
-      <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.3em] text-destructive">Risk, in plain language</p>
-        <h1 className="font-serif text-4xl">Read this before you say amen.</h1>
+    <article className="mx-auto max-w-3xl space-y-10 px-5 py-16 sm:py-24">
+      <header className="space-y-4">
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Risk, in plain language</p>
+        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Read this before you say amen.</h1>
         <p className="text-muted-foreground">Not for US persons. Not investment advice. Stock Tokens are debt securities and give no share ownership.</p>
       </header>
       {SECTIONS.map((s) => (
-        <section key={s.h} className="space-y-3 border-t border-border pt-6">
-          <h2 className="font-serif text-2xl">{s.h}</h2>
+        <section key={s.h} className="space-y-3 rounded-xl border border-border bg-card p-6">
+          <h2 className="text-xl font-semibold tracking-tight">{s.h}</h2>
           {s.p.map((p, i) => (
             <p key={i} className="leading-relaxed text-muted-foreground">
               {p}

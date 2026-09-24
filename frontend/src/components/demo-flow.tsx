@@ -11,7 +11,7 @@ import { decodeError } from "@/lib/errors";
 import { fmt18, fmtNy, fmtUsd18, fmtUsdg } from "@/lib/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SessionChip } from "@/components/session-chip";
+import { CheckCircle2, Loader2, Play, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Who = keyof typeof ACCOUNTS;
@@ -223,92 +223,118 @@ export function DemoFlow() {
     },
   ];
   const nextIdx = steps.findIndex((s) => !s.done);
+  const doneCount = steps.filter((s) => s.done).length;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex-row flex-wrap items-start justify-between gap-6">
+    <div className="grid gap-4 xl:grid-cols-3">
+      <Card className="min-w-0 xl:col-span-2">
+        <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-gilt">Local demo · anvil 31337 · mocks only</p>
-            <CardTitle>Friday close → Monday open, in twelve clicks</CardTitle>
+            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Live demo · chain 31337 · mocks only</p>
+            <CardTitle className="text-lg">Friday close → Monday open, in twelve clicks</CardTitle>
             <CardDescription>
-              Same steps, same order as <code className="font-mono">./script/local-demo.sh</code>. Transactions are sent as anvil dev
-              accounts (owner #0, user1 #1, user2 #2). No wallet is needed. Chain time: {now ? fmtNy(now) : "—"}
+              Transactions are sent as the demo chain&apos;s dev accounts (owner #0, user1 #1, user2 #2). No wallet is needed.
+              Chain time: {now ? fmtNy(now) : "—"}
             </CardDescription>
           </div>
-          <SessionChip large />
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" disabled={!!busy} onClick={rewind}>
+              <RotateCcw className="h-3.5 w-3.5" /> Rewind to Friday 16:02
+            </Button>
+            <Button size="sm" disabled={!!busy || nextIdx < 0} onClick={() => nextIdx >= 0 && steps[nextIdx].action()}>
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {nextIdx < 0 ? "All done" : `Run step ${steps[nextIdx].n}`}
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {steps.map((s, i) => (
-            <div
-              key={s.n}
-              className={cn(
-                "flex flex-wrap items-center gap-4 rounded-md border px-4 py-3",
-                i === nextIdx ? "border-gilt/60 bg-gilt/5" : "border-border",
-                s.done && "opacity-60",
-              )}
-            >
-              <span className="w-6 font-mono text-sm text-muted-foreground">{s.n}.</span>
-              <span className="w-16 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{s.who}</span>
-              <div className="min-w-[16rem] flex-1">
-                <div className="text-sm">{s.title}</div>
-                <div className="text-xs text-muted-foreground">{s.detail}</div>
-              </div>
-              <Button
-                size="sm"
-                variant={i === nextIdx ? "default" : "outline"}
-                disabled={!!busy || s.done || !!s.disabledNote}
-                onClick={s.action}
-              >
-                {s.done ? (s.disabledNote ?? "done") : busy && i === nextIdx ? "…" : "Run"}
-              </Button>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
             </div>
-          ))}
-          <div className="flex items-center justify-between pt-2">
-            <div className="space-y-1 text-xs">
+            <span className="font-mono text-xs text-muted-foreground">
+              {doneCount}/{steps.length}
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="hidden grid-cols-[2.5rem_5rem_1fr_6rem] gap-3 border-b border-border bg-card-raised px-4 py-2 font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground sm:grid">
+              <span>Step</span>
+              <span>Actor</span>
+              <span>Action</span>
+              <span className="text-right">Status</span>
+            </div>
+            {steps.map((s, i) => (
+              <div
+                key={s.n}
+                className={cn(
+                  "grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:grid-cols-[2.5rem_5rem_1fr_6rem]",
+                  i === nextIdx && "bg-primary/[0.06]",
+                )}
+              >
+                <span className={cn("font-mono text-sm", i === nextIdx ? "text-primary" : "text-muted-foreground")}>{String(s.n).padStart(2, "0")}</span>
+                <span className="hidden font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground sm:block">{s.who}</span>
+                <div className="min-w-0">
+                  <div className={cn("text-sm", s.done && "text-muted-foreground")}>{s.title}</div>
+                  <div className="text-xs text-muted-foreground">{s.detail}</div>
+                </div>
+                <div className="flex justify-end">
+                  {s.done ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-up" />
+                      {s.disabledNote ?? "done"}
+                    </span>
+                  ) : (
+                    <Button size="sm" variant={i === nextIdx ? "default" : "outline"} disabled={!!busy || !!s.disabledNote} onClick={s.action}>
+                      {busy && i === nextIdx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Run"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {log.length > 0 && (
+            <div className="space-y-1 rounded-lg border border-border bg-card-raised p-3 font-mono text-[11px]">
               {log.map((l, i) => (
                 <div key={i} className={l.ok ? "text-muted-foreground" : "text-destructive"}>
                   {l.text}
                 </div>
               ))}
             </div>
-            <Button size="sm" variant="ghost" disabled={!!busy} onClick={rewind}>
-              Rewind to Friday 16:02
-            </Button>
-          </div>
+          )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-x-8 gap-y-3 font-mono text-sm sm:grid-cols-2">
-          <Row k="Close mark" v={closeRecorded && close ? `${fmtUsd18(close.priceUsd)} · round ${close.roundId} @ ${fmtNy(close.updatedAt)}` : "not recorded"} />
-          <Row k="Pools" v={hasMarket && mk ? `YES ${fmtUsdg(mk.yesPool)} · NO ${fmtUsdg(mk.noPool)} USDG` : "—"} />
-          <Row
-            k="Resolve mark"
-            v={mk?.resolved ? `${fmtUsd18(mk.resolvePrice)} @ ${fmtNy(mk.resolveMarkTs)} · move ${(Number(mk.moveBps) / 100).toFixed(2)}% → ${mk.yesWins ? "YES" : "NO"}` : mk?.voided ? "voided (refunds)" : "—"}
-          />
-          <Row k="Claims" v={mk?.resolved ? `user1 ${p1?.claimed ? "claimed" : "can claim"} ${fmtUsdg(u1Payout)} · user2 ${fmtUsdg(u2Claimable)} USDG` : "—"} />
-          <Row k="Taker fee" v={fees !== undefined ? `${fmtUsdg(fees, 6)} USDG` : "—"} />
-          <Row
-            k="Vault cycle #1"
-            v={cyc && cyc.endTs > 0n ? `NAV ${fmtUsdg(cyc.navStart)} → ${fmtUsdg(cyc.navEnd, 6)} · PnL ${fmtUsdg(cyc.realizedPnl, 6)} · fee ${fmtUsdg(cyc.perfFee, 6)} USDG` : cycleId >= 1n ? `open · NVDA held ${fmt18(stockHeld, 6)}` : "—"}
-          />
-        </CardContent>
-      </Card>
-
-      <DemoBalances />
+      <div className="grid content-start gap-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>Demo summary</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-border">
+            <Row k="Close mark" v={closeRecorded && close ? `${fmtUsd18(close.priceUsd)} · round ${close.roundId}` : "not recorded"} />
+            <Row k="Pools" v={hasMarket && mk ? `YES ${fmtUsdg(mk.yesPool)} · NO ${fmtUsdg(mk.noPool)} USDG` : "—"} />
+            <Row
+              k="Resolve mark"
+              v={mk?.resolved ? `${fmtUsd18(mk.resolvePrice)} · ${(Number(mk.moveBps) / 100).toFixed(2)}% → ${mk.yesWins ? "YES" : "NO"}` : mk?.voided ? "voided (refunds)" : "—"}
+            />
+            <Row k="Claims" v={mk?.resolved ? `user1 ${p1?.claimed ? "claimed" : "can claim"} ${fmtUsdg(u1Payout)} USDG` : "—"} />
+            <Row k="Taker fee" v={fees !== undefined ? `${fmtUsdg(fees, 6)} USDG` : "—"} />
+            <Row
+              k="Vault cycle #1"
+              v={cyc && cyc.endTs > 0n ? `PnL ${fmtUsdg(cyc.realizedPnl, 6)} · fee ${fmtUsdg(cyc.perfFee, 6)} USDG` : cycleId >= 1n ? `open · NVDA ${fmt18(stockHeld, 4)}` : "—"}
+            />
+          </CardContent>
+        </Card>
+        <DemoBalances />
+      </div>
     </div>
   );
 }
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex flex-col">
-      <span className="font-sans text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{k}</span>
-      <span>{v}</span>
+    <div className="flex items-start justify-between gap-4 py-2 text-[13px]">
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">{k}</span>
+      <span className="text-right font-mono text-xs text-foreground">{v}</span>
     </div>
   );
 }
@@ -327,29 +353,29 @@ function DemoBalances() {
   const v = (i: number) => data?.[i]?.result as bigint | undefined;
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Demo accounts</CardTitle>
-        <CardDescription>USDG has 6 decimals. NVDA raw is the Stock Token balanceOf (18 dec). Share-equivalent is balanceOfUI (raw × uiMultiplier) and gives economic exposure only, not share ownership.</CardDescription>
+      <CardHeader className="pb-3">
+        <CardTitle>Demo accounts</CardTitle>
+        <CardDescription>NVDA raw is the Stock Token balanceOf (18 dec). Share-equiv. is balanceOfUI (raw × uiMultiplier): economic exposure only, not share ownership.</CardDescription>
       </CardHeader>
       <CardContent>
-        <table className="w-full font-mono text-sm">
-          <thead className="text-left font-sans text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+        <table className="w-full font-mono text-xs tabular-nums">
+          <thead className="text-left font-mono text-[10.5px] uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="py-1">Account</th>
-              <th>USDG</th>
-              <th>NVDA raw</th>
-              <th>NVDA share-equiv.</th>
+              <th className="text-right">USDG</th>
+              <th className="text-right">NVDA raw</th>
+              <th className="text-right">Share-equiv.</th>
             </tr>
           </thead>
           <tbody>
             {who.map(([name, a], i) => (
               <tr key={name} className="border-t border-border">
-                <td className="py-1.5">
-                  {name} <span className="text-xs text-muted-foreground">{a.slice(0, 6)}…</span>
+                <td className="py-2">
+                  {name} <span className="text-muted-foreground">{a.slice(0, 6)}…</span>
                 </td>
-                <td>{fmtUsdg(v(i * 3))}</td>
-                <td>{fmt18(v(i * 3 + 1), 6)}</td>
-                <td>{fmt18(v(i * 3 + 2), 6)}</td>
+                <td className="text-right">{fmtUsdg(v(i * 3))}</td>
+                <td className="text-right">{fmt18(v(i * 3 + 1), 4)}</td>
+                <td className="text-right">{fmt18(v(i * 3 + 2), 4)}</td>
               </tr>
             ))}
           </tbody>

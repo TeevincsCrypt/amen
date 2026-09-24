@@ -22,7 +22,7 @@ Over a weekend the NAV prices NVDA at a stale mark. If LPs could enter or exit t
 ## Run the demo
 ```bash
 ./script/local-demo.sh                         # anvil 31337: deploy → full flow → one-screen summary → rewind to Fri 16:02
-cd frontend && npm install && npm run dev      # http://localhost:3000 : the same 12 steps as buttons, no wallet needed
+cd frontend && npm install && npm run dev      # http://localhost:3000/app : the same 12 steps as buttons, no wallet needed
 ```
 The flow: record close → 1% gap market → user1 YES 100 / user2 NO 300 → vault takes 40 USDG of NVDA → Monday 09:45 print $182 → resolve → user1 claims 396 USDG → flatten → cycle PnL +0.444 USDG.
 

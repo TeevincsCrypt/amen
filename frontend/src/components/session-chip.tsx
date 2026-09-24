@@ -15,11 +15,11 @@ export function SessionChip({ large = false }: { large?: boolean }) {
 
   if (!large) {
     return (
-      <Badge variant={variant} title={s.freezeReason ? `Frozen: ${s.freezeReason}` : undefined}>
-        <span className={cn("h-1.5 w-1.5 rounded-full bg-current", s.state !== "FROZEN" && "animate-pulse")} />
+      <Badge variant={variant} title={s.freezeReason ? `Frozen: ${s.freezeReason}` : undefined} className="h-7 whitespace-nowrap">
+        <span className={cn("h-1.5 w-1.5 rounded-full bg-current", s.state !== "FROZEN" && "animate-pulse-dot")} />
         {s.state === "UNKNOWN" ? "…" : s.state}
         {remaining !== undefined && s.state !== "FROZEN" && (
-          <span className="font-mono normal-case tracking-normal opacity-80">· {fmtCountdown(remaining)}</span>
+          <span className="font-mono normal-case tracking-normal opacity-80">{fmtCountdown(remaining)}</span>
         )}
       </Badge>
     );
@@ -27,14 +27,17 @@ export function SessionChip({ large = false }: { large?: boolean }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <Badge variant={variant} className="w-fit px-3 py-1 text-xs">
-        <span className="h-2 w-2 rounded-full bg-current" />
+      <Badge variant={variant} className="w-fit">
+        <span className={cn("h-1.5 w-1.5 rounded-full bg-current", s.state !== "FROZEN" && "animate-pulse-dot")} />
         {s.state === "UNKNOWN" ? "Reading chain…" : s.state}
         {s.state === "FROZEN" && s.freezeReason && <span className="normal-case tracking-normal">· {s.freezeReason}</span>}
       </Badge>
-      <div className="font-mono text-3xl tabular-nums sm:text-4xl">{remaining !== undefined ? fmtCountdown(remaining) : "—"}</div>
-      <div className="text-sm text-muted-foreground">
-        {label} {target ? fmtNy(target) : ""} <span className="opacity-70">(America/New_York, chain time {now ? fmtNy(now) : "—"})</span>
+      <div className="text-4xl font-semibold tracking-tight">{remaining !== undefined ? fmtCountdown(remaining) : "—"}</div>
+      <div className="space-y-1 text-[13px] text-muted-foreground">
+        <p>
+          {label} <span className="text-foreground">{target ? fmtNy(target) : "—"}</span>
+        </p>
+        <p className="font-mono text-[11px]">America/New_York · chain time {now ? fmtNy(now) : "—"}</p>
       </div>
     </div>
   );

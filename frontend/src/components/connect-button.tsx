@@ -3,6 +3,7 @@
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { numberToHex } from "viem";
 import { useState } from "react";
+import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { activeChain } from "@/lib/chains";
 import { shortAddr } from "@/lib/format";
@@ -72,6 +73,7 @@ export function ConnectButton() {
             }
           }}
         >
+          <Wallet className="h-3.5 w-3.5" />
           {isPending ? "Connecting…" : "Connect wallet"}
         </Button>
         {err && <span className="mt-1 max-w-[16rem] text-right text-[11px] text-destructive">{err}</span>}
@@ -94,9 +96,10 @@ export function ConnectButton() {
     <button
       onClick={() => disconnect()}
       title="Disconnect"
-      className="rounded-md border border-border px-3 py-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"
+      className="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-card-raised px-3 font-mono text-xs text-muted-foreground hover:text-foreground"
     >
-      {shortAddr(address)} · {activeChain.id}
+      <span className="h-1.5 w-1.5 rounded-full bg-up" />
+      {shortAddr(address)}
     </button>
   );
 }

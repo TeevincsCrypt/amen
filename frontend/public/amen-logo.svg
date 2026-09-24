@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 0 490 480" fill="none">
+  <defs>
+    <linearGradient id="amenLeg" x1="80" y1="470" x2="260" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46ECFF"/><stop offset=".5" stop-color="#1A9FE6"/><stop offset="1" stop-color="#0B2A63"/>
+    </linearGradient>
+    <linearGradient id="amenTop" x1="230" y1="60" x2="400" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4DF0FF"/><stop offset=".7" stop-color="#2AD2FB"/><stop offset="1" stop-color="#1398E0"/>
+    </linearGradient>
+    <linearGradient id="amenRight" x1="400" y1="220" x2="500" y2="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1FB6F2"/><stop offset=".45" stop-color="#155FAF"/><stop offset="1" stop-color="#0B2A63"/>
+    </linearGradient>
+    <linearGradient id="amenSweep" x1="175" y1="420" x2="470" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B2A63"/><stop offset=".45" stop-color="#1AAAEE"/><stop offset="1" stop-color="#46ECFF"/>
+    </linearGradient>
+  </defs>
+  <path d="M60 460C60 300 120 165 210 90L290 158C230 215 176 320 170 460Z" fill="url(#amenLeg)"/>
+  <path d="M425 168C470 240 506 340 515 460H410C408 385 392 300 350 240Z" fill="url(#amenRight)"/>
+  <path d="M210 90L290 15C354 64 402 118 436 184L355 246Z" fill="url(#amenTop)"/>
+  <path d="M178 338C262 306 360 270 441 198L482 262C400 352 290 418 170 460Z" fill="url(#amenSweep)"/>
+</svg>

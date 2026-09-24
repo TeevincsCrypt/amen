@@ -131,3 +131,37 @@ export function useBlockTs(): bigint | undefined {
   const { data: block } = useBlock({ watch: true, query: { refetchInterval: POLL } });
   return block?.timestamp;
 }
+
+export type RoundPoint = { roundId: bigint; ts: number; price: bigint };
+
+/** Last `n` Chainlink rounds for NVDA via the oracle (price normalized to 18 dec). */
+export function useRoundHistory(n = 48): { points: RoundPoint[]; loaded: boolean } {
+  const enabled = !!deployment;
+  const { data: latest } = useReadContract({
+    address: deployment?.oracle,
+    abi: amenOracleAbi,
+    functionName: "latestRoundId",
+    args: deployment ? [deployment.nvda] : undefined,
+    query: { enabled, refetchInterval: POLL },
+  });
+  const ids: bigint[] = [];
+  if (latest && latest > 0n) {
+    const first = latest > BigInt(n) ? latest - BigInt(n) + 1n : 1n;
+    for (let id = first; id <= latest; id++) ids.push(id);
+  }
+  const { data } = useReadContracts({
+    contracts: ids.map((id) => ({
+      address: deployment!.oracle,
+      abi: amenOracleAbi,
+      functionName: "getRoundMark" as const,
+      args: [deployment!.nvda, id] as const,
+    })),
+    query: { enabled: enabled && ids.length > 0, refetchInterval: POLL * 2 },
+  });
+  const points: RoundPoint[] = [];
+  data?.forEach((d, i) => {
+    const r = d?.result as readonly [boolean, bigint, bigint] | undefined;
+    if (r && r[0]) points.push({ roundId: ids[i], price: r[1], ts: Number(r[2]) });
+  });
+  return { points, loaded: latest !== undefined };
+}
