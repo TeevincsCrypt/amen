@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Stat } from "@/components/stat";
 import { TxStatus } from "@/components/tx-status";
 import { NoDeployment } from "@/components/no-deployment";
+import { isLocal } from "@/lib/chains";
+import Link from "next/link";
 import { bytes32ToString, fmtBps, fmtCountdown, fmtNy, fmtUsd18, fmtUsdg } from "@/lib/format";
 
 type Market = {
@@ -67,7 +69,20 @@ function Markets() {
       <SessionAdmin />
 
       {ids.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No markets yet.</p>
+        <p className="text-sm text-muted-foreground">
+          No markets yet.
+          {isLocal && (
+            <>
+              {" "}
+              <code className="font-mono">./script/local-demo.sh</code> rewinds the chain to Friday 16:02 New York,
+              before Market #1 exists. Run steps 1–2 on the{" "}
+              <Link href="/" className="underline">
+                home page
+              </Link>{" "}
+              (or rerun the script with <code className="font-mono">--no-rewind</code>) and it will appear here.
+            </>
+          )}
+        </p>
       ) : (
         <div className="grid gap-6">
           {ids.map((id) => (
