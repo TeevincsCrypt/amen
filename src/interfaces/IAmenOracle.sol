@@ -25,5 +25,6 @@ interface IAmenOracle {
         external
         view
         returns (bool ok, uint256 priceUsd, uint256 updatedAt);
+    function latestRoundId(address stockToken) external view returns (uint80);
     function isStockPaused(address stockToken) external view returns (bool);
 }
