@@ -45,7 +45,7 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
 
     uint256 public constant BPS = 10_000;
     uint256 public constant MAX_PERF_FEE_BPS = 3_000;
-    uint256 public constant MAX_DEVIATION_BPS = 2_000;
+    uint256 public constant MAX_DEVIATION_BPS = 50; // hard cap: owner may only tighten
 
     IAmenOracle public immutable oracle;
     IERC20 public immutable stock;
@@ -56,7 +56,7 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     uint256 public maxInventoryBps = 5_000; // 50% of NAV
     uint256 public perfFeeBps = 1_000; // 10% of positive cycle PnL
     uint256 public mgmtFeeBps; // reserved, 0 in Phase 1 (not charged)
-    uint256 public maxDeviationBps = 500; // swap price vs oracle mark
+    uint256 public maxDeviationBps = 50; // 0.50%: swap price vs oracle mark
     bool public allowInKind; // default false: force flatten first
 
     uint256 public stockHeld; // raw 18-dec stock units owned by the vault
@@ -407,7 +407,7 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     /// @notice Updates risk and fee parameters.
     /// @param maxInventoryBps_ Max stock value as a share of NAV (<= 10000).
     /// @param perfFeeBps_ Performance fee on positive cycle PnL (<= 3000).
-    /// @param maxDeviationBps_ Max swap price deviation vs the mark (<= 2000).
+    /// @param maxDeviationBps_ Max swap price deviation vs the mark (<= 50 bps).
     /// @param allowInKind_ Enables `redeemInKind`.
     function setParams(
         uint256 maxInventoryBps_,

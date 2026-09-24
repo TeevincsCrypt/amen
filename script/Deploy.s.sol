@@ -6,7 +6,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {AmenOracle} from "../src/AmenOracle.sol";
 import {VespersVault} from "../src/VespersVault.sol";
 import {AmenMarket} from "../src/AmenMarket.sol";
-import {UniswapV3PoolAdapter} from "../src/adapters/UniswapV3PoolAdapter.sol";
+import {UniswapV3PoolAdapter, IUniswapV3Factory} from "../src/adapters/UniswapV3PoolAdapter.sol";
 import {IAggregatorV3} from "../src/interfaces/IAggregatorV3.sol";
 import {IStockToken} from "../src/interfaces/IStockToken.sol";
 import {MockUSDG} from "../src/mocks/MockUSDG.sol";
@@ -70,6 +70,7 @@ contract DeployMainnet is DeployBase {
         address feed = vm.parseJsonAddress(cfg, ".nvdaFeed");
         address factory = vm.parseJsonAddress(cfg, ".uniswapV3Factory");
         uint24 feeTier = uint24(vm.parseJsonUint(cfg, ".uniswapFeeTier"));
+        address pool = vm.parseJsonAddress(cfg, ".nvdaUsdgPool");
 
         // Live re-verification (brief: "Always re-read symbol(), decimals(), and bytecode on-chain").
         require(usdg.code.length > 0 && nvda.code.length > 0 && feed.code.length > 0, "missing bytecode");
@@ -78,6 +79,9 @@ contract DeployMainnet is DeployBase {
         require(IStockToken(nvda).uiMultiplier() > 0, "NVDA uiMultiplier");
         (, int256 answer,, uint256 updatedAt,) = IAggregatorV3(feed).latestRoundData();
         require(answer > 0 && updatedAt > 0, "feed");
+        require(IAggregatorV3(feed).decimals() == 8, "feed decimals != 8");
+        // The adapter resolves the pool via the factory; it must be the configured 0.05% NVDA/USDG pool.
+        require(IUniswapV3Factory(factory).getPool(usdg, nvda, feeTier) == pool, "pool mismatch");
         console2.log("USDG", IERC20Metadata(usdg).symbol());
         console2.log("NVDA", IStockToken(nvda).symbol(), "feed decimals", IAggregatorV3(feed).decimals());
 

@@ -11,7 +11,7 @@ gap have nowhere clean to do it.
 
 ## Mechanism
 1. **Vespers Vault (NVDA/USDG).** LPs deposit USDG. Only while cash is closed ("Vespers"), a keeper
-   may move up to 50% of NAV into NVDA, within 5% of the oracle mark. At the open the vault
+   may move up to 50% of NAV into NVDA, within 0.5% (50 bps) of the oracle mark. At the open the vault
    flattens back to USDG and the cycle's realized PnL is booked, with a 10% performance fee. While
    inventory is held over a stale weekend mark, LP entry and exit lock so no LP can arbitrage another.
 2. **Amen Market.** Parimutuel YES/NO books in USDG on the NVDA weekend or overnight gap:

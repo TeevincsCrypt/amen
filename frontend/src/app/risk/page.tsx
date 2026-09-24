@@ -34,7 +34,7 @@ const SECTIONS: { h: string; p: string[] }[] = [
     h: "Vespers Vault risks",
     p: [
       "The vault may hold up to 50% of its NAV in NVDA while cash is closed. If NVDA gaps against that inventory at the open, LPs lose money. That is the risk LPs are paid to take.",
-      "Inventory is moved by a keeper through a swap venue, within 5% of the oracle mark. A 10% performance fee is charged on positive realized cycle PnL. There is no management fee in Phase 1.",
+      "Inventory is moved by a keeper through a swap venue, within 0.5% (50 bps) of the oracle mark. A 10% performance fee is charged on positive realized cycle PnL. There is no management fee in Phase 1.",
       "If the oracle is frozen while the vault holds NVDA, or during a cash-open freeze, deposits and withdrawals lock until the mark is healthy.",
     ],
   },

@@ -45,12 +45,19 @@ Phase 1 is an MVP. It is **unaudited**, and it is **not for US persons**. Nothin
   lock (`VespersInventoryLocked`). Otherwise an LP who saw off-chain overnight prices could enter or
   exit against a known-stale NAV. LPs exit in USDG at the next flatten. In-kind exit is available
   only if the owner enables `allowInKind`.
-- **Keeper execution risk.** Swaps must be within `maxDeviationBps` (5%) of the oracle mark and at
-  or above the keeper's `minOut`. During Vespers, the mark used for that bound may itself be stale.
-  A dishonest keeper could leak up to about 5% per trade: that's the trust assumption on keepers
-  in Phase 1.
-- **Liquidity risk.** If the NVDA/USDG pool is shallow, flattening at the open may fail the
-  deviation bound, and withdrawals then revert `CashOpenFlattenRequired` until it succeeds.
+- **Keeper execution risk.** Swaps must be within `maxDeviationBps` = **50 bps (0.5%)** of the oracle
+  mark and at or above the keeper's `minOut`. 50 bps is both the default and a hard cap
+  (`MAX_DEVIATION_BPS`): the owner can tighten it but never loosen it. During Vespers, the mark used
+  for that bound may itself be stale. A dishonest or careless keeper could leak up to about 0.5% of
+  each trade's notional: that's the trust assumption on keepers in Phase 1.
+- **Venue.** Mainnet inventory moves only through the NVDA/USDG 0.05% Uniswap V3 pool
+  (`0xd4eb21209c4d6093f80b5b84f5c45cc093ea14a3`, fee 500). The deploy script refuses to run if
+  `factory.getPool(USDG, NVDA, 500)` returns a different address.
+- **Liquidity risk.** With a 50 bps bound, a shallow pool or pool fee (5 bps) plus price impact
+  above 0.5% makes a buy or flatten revert (`PriceDeviation`). This fails safe: no trade happens.
+  But a vault still holding NVDA at the open can't pay withdrawals beyond its free USDG
+  (`CashOpenFlattenRequired`) until the keeper flattens in smaller clips or the pool price returns
+  to the mark.
 - **Stock donations** are ignored. Inventory is tracked internally, so nobody can grief the vault into a locked state.
 - **Inflation attack** is mitigated with ERC-4626 `_decimalsOffset = 12`.
 - Cycle PnL is exact only when entered and exited flat. `redeemInKind` during a cycle values the
@@ -81,14 +88,15 @@ Phase 1 is an MVP. It is **unaudited**, and it is **not for US persons**. Nothin
   snapshotted per market).
 - `ReentrancyGuard` protects every state-changing vault and market entry point, and the tests
   cover reentrant tokens.
-- Unaudited. The Uniswap V3 adapter has only been tested against a fake pool; run the fork tests
-  against the real pool before use.
+- Unaudited. The Uniswap V3 adapter has only been unit-tested against a fake pool. The fork suite
+  checks the real pool's address, fee and tokens but does not execute a swap (see `docs/VERIFY.md`).
 
 ## 7. Items to verify before mainnet
 
-1. `symbol()`, `decimals()` and bytecode for USDG, NVDA and the NVDA/USD feed on Blockscout
-   (`forge test --match-path 'test/fork/*' --fork-url $RH_RPC -vv` prints them).
-2. Whether NVDA exposes `oraclePaused()`.
-3. That the NVDA/USD feed's `getRoundData(roundId − 1)` works within a phase. Resolution relies on it.
-4. That an NVDA/USDG Uniswap V3 pool and fee tier exist (`config/4663.json: uniswapFeeTier`).
-5. The 2026/2027 NYSE holiday calendar, loaded via `setHoliday`.
+Confirmed by the project owner off-sandbox: NVDA exposes `oraclePaused()` (currently `false`),
+`uiMultiplier()` is about 1.000775e18, the NVDA/USD feed has 8 decimals, `getRoundData(roundId − 1)`
+works on the live feed, and the NVDA/USDG 0.05% pool is `0xd4eb…14a3`.
+
+Still to run before any broadcast (commands in `docs/VERIFY.md`):
+1. The fork suite on 4663. It hasn't run from the build sandbox because Robinhood RPC is blocked there.
+2. The 2026/2027 NYSE holiday calendar, loaded via `setHoliday`.

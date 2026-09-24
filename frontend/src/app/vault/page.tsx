@@ -231,7 +231,7 @@ function Vault() {
           <CardHeader>
             <CardTitle className="text-base">Keeper console</CardTitle>
             <CardDescription>
-              Inventory can only be added during Vespers, up to {fmtBps(maxInvBps)} of NAV, within 5% of the oracle mark.
+              Inventory can only be added during Vespers, up to {fmtBps(maxInvBps)} of NAV, within 0.5% (50 bps) of the oracle mark.
               Flattening is allowed in any session. Accrued fees: {fmtUsdg(fees, 6)} USDG.
             </CardDescription>
           </CardHeader>

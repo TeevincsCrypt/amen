@@ -151,10 +151,28 @@ contract VespersVaultTest is AmenTestBase {
     function test_RevertWhen_BuyPriceDeviates() public {
         _deposit(alice, 100e6);
         vault.startCycle();
-        adapter.setPrice(190e18); // 5.55% above mark
+        adapter.setPrice(181e18); // 0.56% above mark (> 50 bps)
         vm.prank(keeper);
         vm.expectRevert();
         vault.buyInventory(10e6, 0);
+    }
+
+    function test_DeviationBoundIs50Bps() public {
+        _deposit(alice, 100e6);
+        vault.startCycle();
+        adapter.setPrice(180.8e18); // 0.44% above mark: allowed
+        vm.prank(keeper);
+        vault.buyInventory(10e6, 0);
+        // flatten 0.56% below mark: rejected
+        adapter.setPrice(179e18);
+        uint256 held = vault.stockHeld();
+        vm.prank(keeper);
+        vm.expectPartialRevert(Errors.PriceDeviation.selector);
+        vault.sellInventory(held, 0);
+        // owner cannot loosen past the 50 bps cap
+        vm.prank(owner);
+        vm.expectRevert(Errors.InvalidParam.selector);
+        vault.setParams(5000, 1000, 51, false);
     }
 
     function test_SellAllowedDuringCashOpen_BuyBlocked() public {
@@ -264,7 +282,7 @@ contract VespersVaultTest is AmenTestBase {
         vm.expectRevert(Errors.InKindDisabled.selector);
         vault.redeemInKind(50e18, alice, alice);
         vm.prank(owner);
-        vault.setParams(5000, 1000, 500, true);
+        vault.setParams(5000, 1000, 50, true);
         vm.prank(alice);
         (uint256 u, uint256 s) = vault.redeemInKind(50e18, alice, alice);
         assertEq(u, 32e6);

@@ -1,17 +1,10 @@
 {
-  "_comment": "Robinhood Chain mainnet. Verify every address on https://robinhoodchain.blockscout.com (symbol, decimals, bytecode) before broadcasting.",
+  "_comment": "Robinhood Chain mainnet (4663). Phase 1 addresses only. Re-verify on https://robinhoodchain.blockscout.com before any broadcast.",
   "chainId": 4663,
   "usdg": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
-  "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
   "nvda": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
   "nvdaFeed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
-  "aapl": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9",
-  "aaplFeed": "0x6B22A786bAa607d76728168703a39Ea9C99f2cD0",
-  "spy": "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C",
-  "spyFeed": "0x319724394D3A0e3669269846abE664Cd621f9f6A",
   "uniswapV3Factory": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
-  "uniswapV3PositionManager": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
-  "universalRouter": "0x8876789976dEcBfCbBbe364623C63652db8C0904",
-  "multicall3": "0xcA11bde05977b3631167028862bE2a173976CA11",
-  "uniswapFeeTier": 3000
+  "nvdaUsdgPool": "0xd4eb21209c4d6093f80b5b84f5c45cc093ea14a3",
+  "uniswapFeeTier": 500
 }

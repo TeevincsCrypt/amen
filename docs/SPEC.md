@@ -173,7 +173,7 @@ Both market kinds are parimutuel binaries on USDG. **Conservative interpretation
   - `buyInventory`: only during `isVespers()`, with an unfrozen mark, and while
     post-trade NVDA value ≤ `maxInventoryBps` (default 50%) of NAV.
   - `sellInventory` (flatten): allowed in any session while the mark is unfrozen.
-  - Both check the execution price against the oracle mark (`maxDeviationBps`, default 5%) and
+  - Both check the execution price against the oracle mark (`maxDeviationBps`, default and hard cap 50 bps = 0.5%) and
     the caller's `minOut`.
 - **Cycles:** `startCycle()` can be called by anyone during Vespers. `endCycle()` can be called
   by anyone once cash is open and the vault is flat.
