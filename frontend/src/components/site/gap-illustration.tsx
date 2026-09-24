@@ -35,7 +35,7 @@ const monPath = toPath([X.open + 8, X.end], mon);
 
 export function GapIllustration() {
   return (
-    <figure className="relative overflow-hidden rounded-xl border border-border bg-card/90 shadow-2xl shadow-black/40 backdrop-blur">
+    <figure className="relative overflow-hidden rounded-xl border border-border bg-card/90 shadow-2xl shadow-black/40 backdrop-blur [[data-theme=light]_&]:shadow-black/10">
       <figcaption className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
         <div>
           <p className="font-mono text-[11px] text-muted-foreground">NVDA / USD · Friday close → Monday open</p>
@@ -48,22 +48,22 @@ export function GapIllustration() {
           Illustration
         </span>
       </figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Illustration: NVDA closes Friday at $180, the feed is stale over the weekend, and the first Monday print at $182 is a 1.11% gap">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full text-line" role="img" aria-label="Illustration: NVDA closes Friday at $180, the feed is stale over the weekend, and the first Monday print at $182 is a 1.11% gap">
         <defs>
           <linearGradient id="gi-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#38CFF2" stopOpacity=".22" />
-            <stop offset="1" stopColor="#38CFF2" stopOpacity="0" />
+            <stop offset="0" stopColor="currentColor" stopOpacity=".22" />
+            <stop offset="1" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
           <pattern id="gi-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="8" stroke="#38CFF2" strokeOpacity=".07" strokeWidth="3" />
+            <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeOpacity=".07" strokeWidth="3" />
           </pattern>
         </defs>
 
         {/* session bands */}
         <rect x={X.close} y={Y0 - 34} width={X.open - X.close} height={Y1 - Y0 + 34} fill="url(#gi-hatch)" />
-        <rect x={X.close} y={Y0 - 34} width={X.open - X.close} height={Y1 - Y0 + 34} fill="#38CFF2" fillOpacity=".05" />
+        <rect x={X.close} y={Y0 - 34} width={X.open - X.close} height={Y1 - Y0 + 34} fill="currentColor" fillOpacity=".05" />
         {[X.close, X.open].map((x) => (
-          <line key={x} x1={x} x2={x} y1={Y0 - 34} y2={Y1} stroke="#38CFF2" strokeOpacity=".35" />
+          <line key={x} x1={x} x2={x} y1={Y0 - 34} y2={Y1} stroke="currentColor" strokeOpacity=".35" />
         ))}
         <text x={(X.fri + X.close) / 2} y={Y0 - 16} textAnchor="middle" className="fill-muted-foreground font-mono text-[10px] uppercase tracking-wider">Cash open</text>
         <text x={(X.close + X.open) / 2} y={Y0 - 16} textAnchor="middle" className="fill-primary font-mono text-[10px] uppercase tracking-wider">Vespers · cash closed</text>
@@ -76,13 +76,13 @@ export function GapIllustration() {
 
         {/* Friday session */}
         <path d={`${friPath} L${X.close} ${Y1} L${X.fri} ${Y1} Z`} fill="url(#gi-area)" />
-        <path d={friPath} fill="none" stroke="#38CFF2" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={friPath} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         {/* stale weekend mark */}
-        <line x1={X.close} x2={X.open} y1={y(180)} y2={y(180)} stroke="#38CFF2" strokeOpacity=".7" strokeWidth="2" strokeDasharray="2 6" strokeLinecap="round" />
+        <line x1={X.close} x2={X.open} y1={y(180)} y2={y(180)} stroke="currentColor" strokeOpacity=".7" strokeWidth="2" strokeDasharray="2 6" strokeLinecap="round" />
         <text x={(X.close + X.open) / 2} y={y(180) + 18} textAnchor="middle" className="fill-muted-foreground font-mono text-[9.5px]">feed holds Friday&apos;s print (expected)</text>
         {/* Monday */}
         <path d={`${monPath} L${X.end} ${Y1} L${X.open + 8} ${Y1} Z`} fill="url(#gi-area)" />
-        <path d={monPath} fill="none" stroke="#38CFF2" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={monPath} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
         {/* gap bracket */}
         <line x1={X.open - 6} x2={X.open - 6} y1={y(180)} y2={y(182)} stroke="currentColor" className="text-up" strokeWidth="1.5" />
@@ -91,8 +91,8 @@ export function GapIllustration() {
         <text x={X.open - 16} y={(y(180) + y(182)) / 2 + 3} textAnchor="end" className="fill-foreground font-mono text-[10px] font-medium">+1.11%</text>
 
         {/* markers */}
-        <circle cx={X.close} cy={y(180)} r="5" fill="#38CFF2" stroke="hsl(var(--card))" strokeWidth="2" />
-        <circle cx={X.open + 8} cy={y(182)} r="5" fill="#38CFF2" stroke="hsl(var(--card))" strokeWidth="2" />
+        <circle cx={X.close} cy={y(180)} r="5" fill="currentColor" stroke="hsl(var(--card))" strokeWidth="2" />
+        <circle cx={X.open + 8} cy={y(182)} r="5" fill="currentColor" stroke="hsl(var(--card))" strokeWidth="2" />
         <text x={X.close - 8} y={y(180) - 12} textAnchor="end" className="fill-foreground font-mono text-[10px] font-medium">Official close $180.00</text>
         <text x={X.end} y={y(182) - 16} textAnchor="end" className="fill-foreground font-mono text-[10px] font-medium">First print ≥ 09:30 · $182.00</text>
 

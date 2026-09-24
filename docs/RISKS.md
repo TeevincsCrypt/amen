@@ -20,7 +20,11 @@ Chainlink Stock Token feeds update about 24/5, so a Friday price can still be th
 ## 3. Keeper, 50 bps
 Inventory moves are keeper-only and must execute within **50 bps (0.5%)** of the oracle mark and at or above `minOut`. 50 bps is the default and a hard cap: the owner can tighten it but not loosen it. A dishonest keeper can leak up to about 0.5% per trade, and during Vespers the reference mark itself may be stale.
 
-A shallow pool fails safe: the trade reverts. But until the keeper flattens, withdrawals can't exceed the vault's free USDG. Deploy scripts leave the swap adapter **unset** (swaps disabled) on every chain except local anvil 31337, unless `ADAPTER_ENABLED=true`. The live venue would be the NVDA/USDG 0.05% pool `0xd4eb…14a3`, which has only been checked by address and fee, not by executing a swap.
+**How the keeper trades** (only once the owner sets a swap adapter and the keeper runs with `VAULT_TRADING=on`): during Vespers it buys the vault's stock only when the pool sells it at least 10 bps below the Chainlink mark, up to 20% of NAV (on-chain `maxInventoryBps` in the beta; the contract allows up to 50%), and sells everything at the open once the mark is fresh.
+
+**The vault can lose money.** A weekend discount is sometimes a gift from an impatient seller, and sometimes the market pricing bad news the stale mark doesn't know yet. In the second case the vault buys exactly when it shouldn't, and Monday's gap costs more than the discount earned. Cycle PnL is the discount plus the weekend move on the inventory, minus pool fees. There's no fixed yield. `script/EnableVaultTrading.s.sol` and the `VAULT_MAX_USDG` keeper cap are there to start with a tiny size.
+
+A shallow pool fails safe: the trade reverts. But until the keeper flattens, withdrawals can't exceed the vault's free USDG. Deploy scripts leave the swap adapter **unset** (swaps disabled) on every chain except local anvil 31337, unless `ADAPTER_ENABLED=true`. The live venue is the NVDA/USDG 0.05% pool `0xd4eb…14a3`. `test/fork/VaultSwapFork.t.sol` executes real swaps against it on a fork (no funds) and must pass before trading is turned on.
 
 ## 4. DST and holidays
 The session clock computes US DST on-chain (2007+ rule). The owner can pin EDT or EST.

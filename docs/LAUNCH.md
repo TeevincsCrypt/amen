@@ -10,7 +10,7 @@ else should ever see a private key.
 | Vault deposit cap | 10,000 USDG |
 | Max size per market | 2,000 USDG |
 | Taker fee | 1% |
-| Vault inventory swaps | off (no swap adapter) |
+| Vault inventory swaps | off until you turn them on (step 9) |
 | NYSE holidays loaded | 2026-11-26 → 2027-12-24 |
 | Tickers listed | NVDA, AAPL, SPY (`config/stocks-4663.json`) |
 | Vault stock | NVDA only |
@@ -35,7 +35,7 @@ else should ever see a private key.
   prevent one. Plan an audit before raising the caps.
 - [ ] **Holidays.** Check the list in `config/launch-4663.json` against
   https://www.nyse.com/markets/hours-calendars.
-- [ ] **Live checks.** Run `docs/VERIFY.md`. The fork tests must show 6 passed.
+- [ ] **Live checks.** Run `docs/VERIFY.md`. The fork tests must show 9 passed.
 - [ ] **Tickers.** For each entry in `config/stocks-4663.json`, run
   `./script/check-stock.sh <SYMBOL> <token> <feed>`. Every line must pass. Remove any that don't.
 
@@ -99,8 +99,21 @@ git commit -m "Mainnet guarded-beta deployment" && git push
    - `CHAIN_ID` = `4663`
    - `MARKET_SCHEDULE` = `weekend`
    - `DRY_RUN` = `true` for the first deploy
-4. Check the logs: `keeper starting … isKeeperMarket: true`, then quiet ticks. Remove
-   `DRY_RUN` to go live.
+   - **Alerts** (optional, recommended): Telegram or Discord, or both.
+     - Telegram: message **@BotFather** → `/newbot` → copy the token into
+       `ALERT_TELEGRAM_BOT_TOKEN`. Send your new bot any message, then open
+       `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `"chat":{"id":…}` into
+       `ALERT_TELEGRAM_CHAT_ID`.
+     - Discord: Server settings → **Integrations → Webhooks → New Webhook** → copy the URL into
+       `ALERT_DISCORD_WEBHOOK`.
+     - `ALERT_LEVEL` = `info` (every transaction plus problems) or `warn` (problems only).
+4. Check the logs: `keeper starting … isKeeperMarket: true`, then quiet ticks. With alerts set
+   you get a "Keeper started" message. Remove `DRY_RUN` to go live.
+
+You're alerted on: warnings (a market about to void, a missing close), errors, the keeper
+wallet dropping below 0.002 ETH (`LOW_ETH_ALERT`), and, at `info`, every transaction. An alert
+can't tell you the keeper has stopped entirely: for that, set `PORT` = `8080`, give the service a
+Railway domain, and point a free uptime monitor (UptimeRobot, Better Stack) at it.
 
 What it does each week: after Friday's 16:00 New York bell it records the close and opens the
 weekend market for every listed ticker (or only those in `MARKET_TICKERS`, e.g. `NVDA,AAPL`). At Monday's open it resolves the market with the first print at or after 09:30,
@@ -115,6 +128,10 @@ or voids it after 60 minutes so everyone can claim a refund.
    - `NEXT_PUBLIC_DEMO_URL` = the demo site's URL
    - Delete `NEXT_PUBLIC_RPC_URL`, or set it to an Alchemy Robinhood URL for better limits.
    - Optional: `GEOBLOCK_EXTRA` = extra country codes from your legal review, e.g. `DE,FR`.
+   - Recommended: `NEXT_PUBLIC_WC_PROJECT_ID` = a free project ID from https://cloud.reown.com
+     (sign up → **Create project** → copy the Project ID). It turns on **WalletConnect**, so
+     people can connect a phone wallet by scanning a QR code. In the Reown project, add your
+     site's domain under **Domain** (allowlist).
 
    Then **Redeploy**.
 
@@ -133,15 +150,48 @@ your region".
 | Rotate the keeper | Safe | `setKeeper(old, false)` and `setKeeper(new, true)` on oracle, vault and market |
 | List a ticker | Safe | run `script/check-stock.sh` first, then `oracle.setFeed(<token>, <feed>)` and `market.setStockAllowed(<token>, true)` |
 | Delist a ticker | Safe | `market.setStockAllowed(<token>, false)` (open markets still settle) |
+| Turn vault trading off | Keeper env, then Safe | `VAULT_TRADING=off`; once the vault is flat, `vault.setSwapAdapter(0x0000000000000000000000000000000000000000)` |
+| Change the vault inventory cap | Safe | `vault.setParams(<bps of NAV>, 1000, 50, false)` (max 5000 = 50%) |
 | Missed close (feed outage) | Safe or keeper | `oracle.forceRecordSessionClose(<token>, sessionId, roundId)` (still a Chainlink round) |
 | Collect fees | Anyone | `market.claimFees()`, `vault.claimFees()` → sent to the fee recipient |
 
 **Before a normal weekend:** check the keeper log has no `WARN`, and that its ETH balance
 covers a week of gas.
 
+## 9. Turn on vault trading (after a few quiet weekends)
+
+Until this step the vault holds USDG only and earns nothing. With trading on, the keeper buys
+NVDA during Vespers **only when the pool sells it below the Chainlink mark** (by at least
+`VAULT_MIN_EDGE_BPS`, 0.10% by default), and sells it all at Monday's open once the first print
+arrives. The vault gains the discount plus NVDA's weekend move, and loses if NVDA gaps down by
+more than the discount. There is no fixed yield: read `docs/RISKS.md` §3 first.
+
+1. **Test the real pool, with no money** (Git Bash, from the repo):
+   ```bash
+   forge test --match-contract VaultSwapForkTest --fork-url https://rpc.mainnet.chain.robinhood.com -vv
+   ```
+   It must show `2 passed`. Read the log: `within the vault's 50 bps band: true` for 10 and 100
+   USDG, and a `round-trip cost` under about 60 bps. If the pool is too shallow, stop here.
+2. **Deploy the swap adapter** (dry run first, then for real):
+   ```bash
+   forge script script/EnableVaultTrading.s.sol --rpc-url robinhood -vv
+   forge script script/EnableVaultTrading.s.sol --rpc-url robinhood --broadcast --ledger \
+     --verify --verifier blockscout --verifier-url https://robinhoodchain.blockscout.com/api/
+   ```
+   It prints the two Safe calls and records the adapter in `deployments/4663.json`.
+3. **From the Safe**, on the `vault`: `setParams(2000, 1000, 50, false)` (inventory at most 20%
+   of NAV), then `setSwapAdapter(<adapter>)`. Commit and push `deployments/4663.json`.
+4. **Keeper variables** on Railway, for a tiny first weekend:
+   `VAULT_TRADING` = `on`, `VAULT_MAX_USDG` = `50`, `VAULT_CHUNK_USDG` = `25`.
+5. **Watch the weekend:** buys only show up with a discount; on Monday you get "sell all
+   stock" after the first print, then "end cycle". The Vault page shows the cycle's PnL under
+   **Cycle history**.
+6. Raise `VAULT_MAX_USDG` slowly, weekend by weekend. Remove it to use the full 20%.
+
 ## Not in the beta
 
-- **Vault inventory:** no NVDA is bought, because no swap adapter is set. The vault holds USDG
-  only until you enable swaps. The vault is single-ticker (NVDA); markets are not.
+- **Vault inventory:** off until step 9. The vault is single-ticker (NVDA); markets are not.
 - **Other market types:** gap markets only from the keeper; no other market kinds.
-- **Wallets:** injected wallets only (MetaMask and similar). WalletConnect needs a project id.
+- **Wallets:** browser extensions (MetaMask, Rabby…) and, with `NEXT_PUBLIC_WC_PROJECT_ID` set,
+  phone wallets through WalletConnect. The phone wallet must support Robinhood Chain (4663) or
+  let the site add it.

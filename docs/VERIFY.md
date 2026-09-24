@@ -9,13 +9,17 @@ that can reach the RPC. Nothing here deploys or sends a transaction.
 git submodule update --init --recursive
 forge test --match-path 'test/fork/*' --fork-url https://rpc.mainnet.chain.robinhood.com -vv
 ```
-Expected: **6 passed, 0 skipped**.
+Expected: **9 passed, 0 skipped** (6 below, 2 in `VaultSwapFork`, 1 in `NVDAProbe`).
 - `test_Fork_BytecodePresent`
 - `test_Fork_UsdgIs6Decimals`
 - `test_Fork_NvdaStockToken` (`oraclePaused()` exists, and logs `uiMultiplier`)
 - `test_Fork_NvdaFeed` (8 decimals, and `getRoundData(latest − 1)` works)
 - `test_Fork_UniswapPool` (`getPool(USDG, NVDA, 500)` equals `0xd4eb…14a3`)
 - `test_Fork_DeployAndMark` (live mark, not paused, `maxDeviationBps == 50`)
+- `test_Fork_AdapterRoundTrip` (real swaps of 10 / 100 / 1,000 USDG through the pool and back;
+  logs each price against the mark and the round-trip cost)
+- `test_Fork_VaultBuyAndFlatten` (the vault's own buy and flatten in Vespers; a `PriceDeviation`
+  refusal also passes, because it means the pool is outside the 50 bps band right now)
 
 `[SKIP]` means the fork's chain id wasn't 4663.
 

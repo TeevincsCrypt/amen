@@ -66,6 +66,7 @@ function Vault() {
       { ...V, functionName: "maxDeposit", args: [me] },
       { ...V, functionName: "stock" },
       { ...V, functionName: "symbol" },
+      { ...V, functionName: "swapAdapter" },
     ],
     query: { refetchInterval: 4_000 },
   });
@@ -91,6 +92,8 @@ function Vault() {
   const shareSym = r<string>(16) ?? "shares";
   const stockMark = vaultStock?.mark;
   const capped = depositCap !== undefined && depositCap < 2n ** 255n;
+  const adapter = r<Address>(17);
+  const trading = !!adapter && adapter !== zeroAddress;
 
 
   const amount = safeParse(amt, 6);
@@ -175,7 +178,11 @@ function Vault() {
             <Card>
               <CardHeader>
                 <CardTitle>Inventory</CardTitle>
-                <CardDescription>{sym} only while cash is closed, up to {fmtBps(maxInvBps)} of NAV. Swaps within {fmtBps(maxDevBps)} of the mark.</CardDescription>
+                <CardDescription>
+                  {trading
+                    ? `${sym} only while cash is closed, up to ${fmtBps(maxInvBps)} of NAV. Swaps within ${fmtBps(maxDevBps)} of the mark.`
+                    : `Trading is off: the vault holds USDG only. When it's turned on, it carries ${sym} while cash is closed.`}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5 pt-4">
                 <SplitBar
@@ -186,6 +193,16 @@ function Vault() {
                   ]}
                 />
                 <div className="divide-y divide-border">
+                  <DetailRow
+                    k="Trading"
+                    v={
+                      adapter === undefined ? "—" : trading ? (
+                        <span className="text-up">On · buys only below the mark</span>
+                      ) : (
+                        <span className="text-muted-foreground">Off · no swap venue set</span>
+                      )
+                    }
+                  />
                   <DetailRow k="USDG free" v={`${fmtUsdg(usdgFree)} USDG`} />
                   <DetailRow k={`${sym} held`} v={`${fmt18(stockRaw, 6)} raw`} />
                   <DetailRow k={`${sym} value`} v={`${fmtUsdg(stockValue)} USDG`} />
@@ -221,6 +238,8 @@ function Vault() {
               </CardContent>
             </Card>
           </div>
+
+          <CycleHistory latest={cycleId} active={!!cycleActive} />
 
           <WalletHoldings />
 
@@ -349,5 +368,70 @@ function Vault() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** The last eight finished cycles: what the vault earned (or lost) each weekend, before the perf fee. */
+function CycleHistory({ latest, active }: { latest: bigint; active: boolean }) {
+  const d = deployment!;
+  const ids = Array.from({ length: Number(latest > 8n ? 8n : latest) }, (_, i) => latest - BigInt(i));
+  const { data } = useReadContracts({
+    contracts: ids.map((id) => ({ address: d.vault, abi: vespersVaultAbi, functionName: "cycles" as const, args: [id] as const })),
+    query: { enabled: ids.length > 0, refetchInterval: 15_000 },
+  });
+  const done = (data ?? []).map((x) => x.result as Cycle | undefined).filter((c): c is Cycle => !!c && c.endTs > 0n);
+  const total = done.reduce((a, c) => a + c.realizedPnl, 0n);
+  const pct = (c: Cycle) => (c.navStart > 0n ? (Number(c.realizedPnl) / Number(c.navStart)) * 100 : 0);
+  const signed = (v: bigint, dp = 2) => `${v >= 0n ? "+" : "−"}${fmtUsdg(v < 0n ? -v : v, dp)}`;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-72 space-y-1.5">
+          <CardTitle>Cycle history</CardTitle>
+          <CardDescription>Realized PnL per cycle (close → next open), before the performance fee. Past cycles don&apos;t predict the next.</CardDescription>
+        </div>
+        {done.length > 0 && (
+          <div className="shrink-0 text-right">
+            <p className="text-xs text-muted-foreground">{done.length === 1 ? "Last cycle" : `Last ${done.length} cycles`}</p>
+            <p className={cn("font-mono text-lg tabular-nums", total > 0n ? "text-up" : total < 0n ? "text-destructive" : "")}>{signed(total)} USDG</p>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        {done.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {active ? "The first cycle is still running. It's booked at the next open." : "No finished cycles yet. The first one starts at the next US cash close."}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] font-mono text-xs tabular-nums">
+              <thead className="text-left text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="py-1.5 font-normal">Cycle</th>
+                  <th className="font-normal">Closed</th>
+                  <th className="text-right font-normal">NAV start</th>
+                  <th className="text-right font-normal">NAV end</th>
+                  <th className="text-right font-normal">PnL</th>
+                  <th className="text-right font-normal">Return</th>
+                </tr>
+              </thead>
+              <tbody>
+                {done.map((c) => (
+                  <tr key={String(c.id)} className="border-t border-border">
+                    <td className="py-2">#{String(c.id)}</td>
+                    <td className="text-muted-foreground">{fmtNy(c.endTs)}</td>
+                    <td className="text-right">{fmtUsdg(c.navStart)}</td>
+                    <td className="text-right">{fmtUsdg(c.navEnd)}</td>
+                    <td className={cn("text-right", c.realizedPnl > 0n ? "text-up" : c.realizedPnl < 0n ? "text-destructive" : "")}>{signed(c.realizedPnl, 4)}</td>
+                    <td className="text-right">{`${pct(c) >= 0 ? "+" : "−"}${Math.abs(pct(c)).toFixed(2)}%`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

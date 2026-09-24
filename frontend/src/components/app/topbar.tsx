@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ConnectButton } from "@/components/connect-button";
 import { SessionChip } from "@/components/session-chip";
 import { Logo } from "@/components/logo";
@@ -28,7 +29,8 @@ export function Topbar() {
         <Link href="/" className="md:hidden" aria-label="Amen home">
           <Logo size={26} wordmark={false} />
         </Link>
-        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none]">
+        {/* Scrolls sideways when the tickers don't fit; the right edge fades instead of cutting a chip. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pr-6 [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] [scrollbar-width:none]">
           <Chip>
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             {isLocal ? "Demo chain" : activeChain.name}
@@ -47,7 +49,10 @@ export function Topbar() {
             </Link>
           ))}
         </div>
-        <ConnectButton />
+        <div className="flex shrink-0 items-center gap-2">
+          <ThemeToggle />
+          <ConnectButton />
+        </div>
       </div>
       <nav className="flex gap-1 overflow-x-auto border-t border-border px-3 py-2 text-sm md:hidden">
         {APP_NAV.map((l) => (

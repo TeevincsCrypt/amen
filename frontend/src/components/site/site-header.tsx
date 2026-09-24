@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const LINKS = [
   { href: "/#how", label: "How it works" },
@@ -23,12 +24,15 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <Link
-          href="/app"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          Launch app <ArrowUpRight className="h-4 w-4" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <ThemeToggle className="h-9 w-9" />
+          <Link
+            href="/app"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Launch app <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
     </header>
   );

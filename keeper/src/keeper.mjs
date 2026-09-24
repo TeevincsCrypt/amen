@@ -8,7 +8,9 @@
 //   2. create the gap market for that close (weekend closes by default);
 //   3. resolve each market with the first cash-session round at or after its resolve time,
 //      or void it once the 60-minute window has passed (so stakes can be refunded);
-//   4. keep Vespers Vault cycle books (start at the close, end at the open when flat).
+//   4. keep Vespers Vault cycle books (start at the close, end at the open when flat), and, only
+//      if VAULT_TRADING=on and the owner has set a swap adapter, buy the vault's stock during
+//      Vespers when the pool sells it at a discount to the mark, then flatten at the open.
 //
 // Safety: every write is simulated first and skipped if it would revert. The keeper wallet
 // only needs keeper rights and a little ETH for gas; it can never set prices or move user funds.
@@ -19,7 +21,7 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, defineChain, http, parseAbi } from "viem";
+import { BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, defineChain, formatEther, http, parseAbi, parseEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 // ───────────────────────────── config ─────────────────────────────
@@ -35,10 +37,25 @@ const STRIKE_BPS = BigInt(env("STRIKE_BPS", "100"));
 const MARKET_NOTIONAL_USDG = env("MARKET_NOTIONAL_USDG", ""); // default: the contract's maxNotionalLimit
 const MIN_TRADING_WINDOW_SEC = Number(env("MIN_TRADING_WINDOW_SEC", "3600"));
 const VAULT_CYCLES = env("VAULT_CYCLES", "on") === "on";
+// Vault trading (off unless VAULT_TRADING=on; the owner must also have set a swap adapter).
+const VAULT_TRADING = env("VAULT_TRADING", "off") === "on";
+const VAULT_TARGET_BPS = BigInt(env("VAULT_TARGET_BPS", "2000")); // target inventory, % of NAV (contract caps it too)
+const VAULT_MAX_USDG = env("VAULT_MAX_USDG", ""); // optional absolute cap on inventory value, USDG
+const VAULT_CHUNK_USDG = BigInt(Math.round(Number(env("VAULT_CHUNK_USDG", "100")) * 1e6)); // max USDG per buy
+const VAULT_MIN_EDGE_BPS = BigInt(env("VAULT_MIN_EDGE_BPS", "10")); // buy only this far below the mark
+const VAULT_BUY_CUTOFF_MIN = Number(env("VAULT_BUY_CUTOFF_MIN", "60")); // no buys this close to the open
+const SLIPPAGE_BPS = 10n; // minOut tolerance between simulation and inclusion
 const MAX_ROUND_WALK = Number(env("MAX_ROUND_WALK", "600"));
 // Optional comma-separated symbols to auto-create markets for (default: every allowed ticker).
 const MARKET_TICKERS = env("MARKET_TICKERS", "").toUpperCase().split(",").map((x) => x.trim()).filter(Boolean);
 const PORT = env("PORT", "");
+// Alerts: Discord webhook and/or Telegram bot. ALERT_LEVEL=info also reports every transaction.
+const ALERT_DISCORD_WEBHOOK = env("ALERT_DISCORD_WEBHOOK", "");
+const ALERT_TELEGRAM_BOT_TOKEN = env("ALERT_TELEGRAM_BOT_TOKEN", "");
+const ALERT_TELEGRAM_CHAT_ID = env("ALERT_TELEGRAM_CHAT_ID", "");
+const ALERT_LEVEL = env("ALERT_LEVEL", "info"); // info | warn
+const ALERT_REPEAT_MIN = Number(env("ALERT_REPEAT_MIN", "360")); // same alert at most every 6 h
+const LOW_ETH_ALERT = parseEther(env("LOW_ETH_ALERT", "0.002"));
 
 const here = dirname(fileURLToPath(import.meta.url));
 function loadDeployment() {
@@ -112,11 +129,24 @@ const marketAbi = parseAbi([
 const vaultAbi = parseAbi([
   "function cycleActive() view returns (bool)",
   "function stockHeld() view returns (uint256)",
+  "function stock() view returns (address)",
   "function swapAdapter() view returns (address)",
+  "function maxInventoryBps() view returns (uint256)",
+  "function maxDeviationBps() view returns (uint256)",
+  "function inventory() view returns (uint256 usdgFree, uint256 stockRaw, uint256 stockValueUsdg, uint256 nav, uint256 markPrice, bool frozen, bytes32 freezeReason)",
   "function startCycle()",
   "function endCycle()",
   "function flatten(uint256) returns (uint256)",
+  "function buyInventory(uint256,uint256) returns (uint256)",
+  "function sellInventory(uint256,uint256) returns (uint256)",
   "error NotVespers()",
+  "error InvalidParam()",
+  "error ZeroAmount()",
+  "error NoSwapAdapter()",
+  "error PriceDeviation(uint256 execPrice, uint256 markPrice)",
+  "error Slippage(uint256 out, uint256 minOut)",
+  "error InventoryCapExceeded(uint256 stockValueUsdg, uint256 capUsdg)",
+  "error NotKeeper(address caller)",
   "error CycleActive()",
   "error NoActiveCycle()",
   "error NotFlat()",
@@ -133,10 +163,57 @@ const CLOSE_LOOKBACK = 1800n;
 
 const state = { startedAt: new Date().toISOString(), lastTick: null, lastError: null, ticks: 0, sent: [] };
 
-function log(level, msg, extra) {
+function log(level, msg, extra, alertKey) {
   const line = `${new Date().toISOString()} ${level.padEnd(5)} ${msg}${extra ? " " + JSON.stringify(extra, (_, v) => (typeof v === "bigint" ? v.toString() : v)) : ""}`;
   (level === "ERROR" ? console.error : console.log)(line);
+  if (level === "WARN" || level === "ERROR") alert(level, msg, alertKey);
 }
+
+/** Log a status line only when it changes, so a 30-second loop doesn't repeat itself. */
+const notes = new Map();
+function note(key, level, msg) {
+  if (notes.get(key) === msg) return;
+  notes.set(key, msg);
+  log(level, msg);
+}
+
+// ───────────────────────────── alerts ─────────────────────────────
+
+const alertSent = new Map();
+const EXPLORER = CHAIN_ID === 4663 ? "https://robinhoodchain.blockscout.com" : CHAIN_ID === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "";
+const alertsOn = () => !!ALERT_DISCORD_WEBHOOK || (!!ALERT_TELEGRAM_BOT_TOKEN && !!ALERT_TELEGRAM_CHAT_ID);
+
+/**
+ * Send one line to Discord and/or Telegram. Never throws and never blocks the keeper: a failed
+ * alert is only logged. The same text is sent at most once per ALERT_REPEAT_MIN.
+ */
+function alert(level, text, key = text) {
+  if (!alertsOn()) return;
+  if (level === "INFO" && ALERT_LEVEL !== "info") return;
+  const last = alertSent.get(key);
+  if (last && Date.now() - last < ALERT_REPEAT_MIN * 60_000) return;
+  alertSent.set(key, Date.now());
+  const icon = level === "ERROR" ? "🔴" : level === "WARN" ? "🟠" : "🟢";
+  const msg = `${icon} Amen keeper · chain ${CHAIN_ID}${DRY_RUN ? " · dry run" : ""}\n${text}`;
+  const post = (url, body) =>
+    fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) })
+      .then((r) => (r.ok ? undefined : console.error(`alert failed: ${url.split("/")[2]} HTTP ${r.status}`)))
+      .catch((e) => console.error(`alert failed: ${e.message}`));
+  if (ALERT_DISCORD_WEBHOOK) post(ALERT_DISCORD_WEBHOOK, { content: msg.slice(0, 1900) });
+  if (ALERT_TELEGRAM_BOT_TOKEN && ALERT_TELEGRAM_CHAT_ID) {
+    post(`https://api.telegram.org/bot${ALERT_TELEGRAM_BOT_TOKEN}/sendMessage`, { chat_id: ALERT_TELEGRAM_CHAT_ID, text: msg.slice(0, 3900), disable_web_page_preview: true });
+  }
+}
+
+/** Warn when the keeper wallet's gas money runs low. Checked every 20 ticks (~10 min). */
+async function checkGas() {
+  if (!account || state.ticks % 20 !== 1) return;
+  const bal = await pub.getBalance({ address: account.address });
+  state.ethBalance = formatEther(bal);
+  if (bal < LOW_ETH_ALERT) log("WARN", `keeper wallet is low on ETH: ${Number(formatEther(bal)).toFixed(5)} ETH left. Top up ${account.address} on chain ${CHAIN_ID}.`, undefined, "low-eth");
+}
+
+const fmtUsdg = (v) => (Number(v) / 1e6).toFixed(2);
 
 function reason(e) {
   if (e instanceof BaseError) {
@@ -165,6 +242,7 @@ async function write(label, address, abi, functionName, args = []) {
   const rc = await pub.waitForTransactionReceipt({ hash });
   if (rc.status !== "success") throw new Error(`${label}: reverted on-chain (${hash})`);
   log("TX", `${label}`, { hash, block: rc.blockNumber });
+  alert("INFO", `${label}${EXPLORER ? `\n${EXPLORER}/tx/${hash}` : ""}`);
   state.sent.unshift({ label, hash, at: new Date().toISOString() });
   state.sent = state.sent.slice(0, 20);
   return true;
@@ -309,25 +387,117 @@ async function jobSettle(now, markets) {
   }
 }
 
-/** 4. Vault cycle books: start at the close when flat, flatten and end at the open. */
-async function jobVault() {
+/** 4. Vault cycle books: start at the close when flat; trade in Vespers if enabled; flatten and end at the open. */
+async function jobVault(now) {
   if (!VAULT_CYCLES) return;
-  const [active, held, cashOpen, vespers] = await Promise.all([
+  const [active, held, cashOpen, vespers, adapter] = await Promise.all([
     read(D.vault, vaultAbi, "cycleActive"),
     read(D.vault, vaultAbi, "stockHeld"),
     read(D.oracle, oracleAbi, "isCashOpen"),
     read(D.oracle, oracleAbi, "isVespers"),
+    read(D.vault, vaultAbi, "swapAdapter"),
   ]);
-  if (!active && vespers && held === 0n) await write("vault: start cycle", D.vault, vaultAbi, "startCycle");
+  const trading = adapter !== ZERO;
+  if (!active && vespers && held === 0n) {
+    await write("vault: start cycle", D.vault, vaultAbi, "startCycle");
+    return;
+  }
+  if (active && vespers && VAULT_TRADING) {
+    if (!trading) note("vault-no-adapter", "INFO", "VAULT_TRADING=on but the owner hasn't set a swap adapter; not trading");
+    else await vaultBuy(now);
+  }
   if (active && cashOpen) {
     if (held > 0n) {
-      const adapter = await read(D.vault, vaultAbi, "swapAdapter");
-      if (adapter === "0x0000000000000000000000000000000000000000") log("WARN", "vault holds NVDA but no swap adapter is set; cannot flatten");
-      else await write("vault: flatten", D.vault, vaultAbi, "flatten", [0n]);
+      if (!trading) log("WARN", "vault holds stock but no swap adapter is set; cannot flatten");
+      else await vaultFlatten(held);
     } else {
       await write("vault: end cycle", D.vault, vaultAbi, "endCycle");
     }
   }
+}
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+const execPx = (usdg6, stockRaw) => (stockRaw === 0n ? 0n : (usdg6 * 10n ** 12n * 10n ** 18n) / stockRaw);
+const fmtUsd = (wad) => `$${(Number(wad / 10n ** 14n) / 1e4).toFixed(2)}`;
+
+/** Simulate a vault trade as the keeper; returns the amount out, or null with the revert reason. */
+async function simVault(fn, args) {
+  try {
+    const { result } = await pub.simulateContract({ address: D.vault, abi: vaultAbi, functionName: fn, args, account: account?.address ?? env("KEEPER_ADDRESS", undefined) });
+    return { out: result };
+  } catch (e) {
+    return { err: reason(e) };
+  }
+}
+
+/**
+ * Buy the vault's stock during Vespers, but only when the pool sells it at least VAULT_MIN_EDGE_BPS
+ * below the oracle mark (that discount is what LPs are paid for carrying the weekend risk). Up to
+ * VAULT_TARGET_BPS of NAV (and VAULT_MAX_USDG), at most one chunk per tick, never in the last
+ * VAULT_BUY_CUTOFF_MIN minutes before the open. The contract still enforces its own 50%-of-NAV
+ * cap and the 50 bps band around the mark.
+ */
+async function vaultBuy(now) {
+  const [inv, maxInvBps, nextOpen] = await Promise.all([
+    read(D.vault, vaultAbi, "inventory"),
+    read(D.vault, vaultAbi, "maxInventoryBps"),
+    read(D.oracle, oracleAbi, "nextOpenAfter", [now]),
+  ]);
+  const [usdgFree, , stockValue, nav, mark, frozen] = inv;
+  if (frozen) return note("vault-buy", "INFO", "vault: not buying: mark frozen");
+  if (Number(nextOpen - now) < VAULT_BUY_CUTOFF_MIN * 60) return;
+  let target = (nav * (VAULT_TARGET_BPS < maxInvBps ? VAULT_TARGET_BPS : maxInvBps)) / 10_000n;
+  if (VAULT_MAX_USDG) {
+    const cap = BigInt(Math.round(Number(VAULT_MAX_USDG) * 1e6));
+    if (cap < target) target = cap;
+  }
+  const room = target > stockValue ? target - stockValue : 0n;
+  if (room < 1_000_000n) return; // under 1 USDG left to fill
+  let size = room < VAULT_CHUNK_USDG ? room : VAULT_CHUNK_USDG;
+  if (size > usdgFree) size = usdgFree;
+  // Smaller sizes move the pool less, so a big chunk without edge may still work at a quarter.
+  let why = "size under 1 USDG";
+  for (const s of [size, size / 2n, size / 4n]) {
+    if (s < 1_000_000n) break;
+    const sim = await simVault("buyInventory", [s, 0n]);
+    if (sim.err) {
+      why = sim.err;
+      continue;
+    }
+    const px = execPx(s, sim.out);
+    const edgeBps = ((mark - px) * 10_000n) / mark;
+    if (edgeBps < VAULT_MIN_EDGE_BPS) {
+      why = `no discount: pool ${fmtUsd(px)} vs mark ${fmtUsd(mark)} (${edgeBps} bps, need ${VAULT_MIN_EDGE_BPS})`;
+      continue;
+    }
+    const minOut = (sim.out * (10_000n - SLIPPAGE_BPS)) / 10_000n;
+    await write(`vault: buy ${fmtUsdg(s)} USDG of stock at ${fmtUsd(px)}, ${edgeBps} bps under the mark ${fmtUsd(mark)}`, D.vault, vaultAbi, "buyInventory", [s, minOut]);
+    notes.delete("vault-buy");
+    return;
+  }
+  note("vault-buy", "INFO", `vault: not buying: ${why}`);
+}
+
+/**
+ * At the open, once the mark is fresh: sell everything, or in halves if a full sell would land
+ * outside the contract's 50 bps band (a thin pool). Endcycle follows on a later tick when flat.
+ */
+async function vaultFlatten(held) {
+  let why = "";
+  for (const amt of [held, held / 2n, held / 4n, held / 8n]) {
+    if (amt === 0n) break;
+    const sim = await simVault("sellInventory", [amt, 0n]);
+    if (sim.err) {
+      why = sim.err;
+      continue;
+    }
+    const minOut = (sim.out * (10_000n - SLIPPAGE_BPS)) / 10_000n;
+    await write(`vault: sell ${amt === held ? "all" : "part of the"} stock for ${fmtUsdg(sim.out)} USDG`, D.vault, vaultAbi, "sellInventory", [amt, minOut]);
+    notes.delete("vault-sell");
+    return;
+  }
+  // Right after the bell the mark is still Friday's (STALE) until the first print; that's expected.
+  note("vault-sell", "INFO", `vault: can't flatten yet (${why})`);
 }
 
 // ───────────────────────────── loop ─────────────────────────────
@@ -349,7 +519,8 @@ async function tick() {
       await jobCreateMarket(now, markets, stocks);
       await jobSettle(now, await recentMarkets(Math.max(50, stocks.length * 4)));
     }],
-    ["vault", () => jobVault()],
+    ["vault", () => jobVault(now)],
+    ["gas", () => checkGas()],
   ]) {
     try {
       await fn();
@@ -373,9 +544,11 @@ async function main() {
     const stocks = await listedStocks();
     log("INFO", "keeper starting", { chainId, keeper: account.address, isKeeperOracle, isKeeperMarket, ethBalanceWei: bal, dryRun: DRY_RUN, schedule: MARKET_SCHEDULE, tickers: stocks.map((x) => x.symbol).join(",") });
     if (!isKeeperMarket) log("WARN", "this wallet is not a keeper on AmenMarket: market creation will be skipped (closes, resolves and voids are permissionless)");
+    alert("INFO", `Keeper started: ${stocks.map((x) => x.symbol).join(", ") || "no tickers"} · ${Number(formatEther(bal)).toFixed(4)} ETH for gas${VAULT_TRADING ? " · vault trading on" : ""}`);
   } else {
     log("INFO", "keeper starting in DRY_RUN without a key (read + simulate only)", { chainId });
   }
+  if (alertsOn()) log("INFO", `alerts on: ${[ALERT_DISCORD_WEBHOOK && "Discord", ALERT_TELEGRAM_BOT_TOKEN && "Telegram"].filter(Boolean).join(" + ")} (level ${ALERT_LEVEL})`);
 
   if (PORT) {
     createServer((_, res) => {

@@ -21,9 +21,10 @@ const config: Config = {
         destructive: { DEFAULT: hsl("--destructive"), foreground: hsl("--foreground") },
         up: hsl("--up"),
         down: hsl("--down"),
-        // Validated chart pair (dark surface): identity for USDG/NVDA and YES/NO.
-        s1: "#1A9EC6",
-        s2: "#D2732C",
+        // Validated chart pair per theme (see globals.css): identity for USDG/stock and YES/NO.
+        s1: "rgb(var(--s1) / <alpha-value>)",
+        s2: "rgb(var(--s2) / <alpha-value>)",
+        line: "rgb(var(--line) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-geist-sans)", "ui-sans-serif", "system-ui", "sans-serif"],

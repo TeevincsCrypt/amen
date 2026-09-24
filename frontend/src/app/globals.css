@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Amen: near-black surfaces, hairline borders, one brand accent (the logo's cyan → deep blue). */
+/* Amen: near-black surfaces, hairline borders, one brand accent (the logo's cyan → deep blue).
+   Dark is the default token set; [data-theme="light"] on <html> swaps in the light one. */
 @layer base {
   :root {
     --background: 240 8% 3.5%;
@@ -22,12 +23,43 @@
     --up: 152 55% 52%;
     --down: 26 85% 58%;
     --radius: 0.75rem;
+    /* Chart colors (RGB triplets). s1/s2 validated for CVD and contrast on the dark card. */
+    --s1: 26 158 198; /* #1A9EC6 */
+    --s2: 210 115 44; /* #D2732C */
+    --line: 56 207 242; /* #38CFF2 */
+    --brand-gradient: linear-gradient(100deg, #5cf0ff 0%, #22b9ef 45%, #2a6fd9 100%);
+  }
+  :root[data-theme="light"] {
+    --background: 220 20% 97.5%;
+    --foreground: 230 18% 10%;
+    --card: 0 0% 100%;
+    --card-raised: 220 22% 97%;
+    --muted: 220 16% 93%;
+    --muted-foreground: 225 9% 38%;
+    --secondary: 220 16% 95%;
+    --border: 220 14% 88%;
+    --input: 220 14% 80%;
+    --ring: 197 94% 33%;
+    --primary: 197 94% 33%;
+    --primary-foreground: 0 0% 100%;
+    --brand-deep: 214 76% 38%;
+    --destructive: 0 72% 45%;
+    --up: 152 62% 29%;
+    --down: 24 85% 40%;
+    /* Validated for CVD and >= 3:1 contrast on the white card. */
+    --s1: 14 135 179; /* #0E87B3 */
+    --s2: 194 96 28; /* #C2601C */
+    --line: 10 134 184; /* #0A86B8 */
+    --brand-gradient: linear-gradient(100deg, #0aa5d6 0%, #0784b8 45%, #2a5fc9 100%);
   }
   * {
     @apply border-border;
   }
   html {
     color-scheme: dark;
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -46,7 +78,7 @@
     background-size: 48px 48px;
   }
   .text-brand-gradient {
-    background: linear-gradient(100deg, #5cf0ff 0%, #22b9ef 45%, #2a6fd9 100%);
+    background: var(--brand-gradient);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;

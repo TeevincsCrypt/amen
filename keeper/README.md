@@ -16,6 +16,13 @@ Runs Amen's routine, time-driven jobs every `INTERVAL_SEC` (30 s):
    window has passed so stakes can be refunded.
 4. **Vault cycle books:** start a cycle at the close when flat; at the open, flatten (only if a
    swap adapter is set) and end the cycle.
+5. **Vault trading** (only with `VAULT_TRADING=on` and a swap adapter set by the owner): during
+   Vespers, buy the vault's stock when the pool sells it at least `VAULT_MIN_EDGE_BPS` below the
+   Chainlink mark, one chunk per tick, up to `VAULT_TARGET_BPS` of NAV (and `VAULT_MAX_USDG`).
+   No buys in the last `VAULT_BUY_CUTOFF_MIN` minutes before the open. At the open, once the
+   mark is fresh, sell everything (in halves if a full sell would miss the 50 bps band).
+6. **Alerts** to Telegram and/or Discord: warnings, errors, low gas and (at `ALERT_LEVEL=info`)
+   every transaction, each with an explorer link. The same alert repeats at most every 6 hours.
 
 Every write is simulated first and skipped if it would revert. The keeper wallet needs only
 keeper rights and a little ETH for gas. It can't set prices or move user funds.
@@ -32,6 +39,16 @@ keeper rights and a little ETH for gas. It can't set prices or move user funds.
 | `MARKET_NOTIONAL_USDG` | contract limit | Per-market cap, never above `maxNotionalLimit`. |
 | `MARKET_TICKERS` | all listed | Optional comma list, e.g. `NVDA,AAPL`, to open markets for only those tickers. Closes are still recorded and markets still resolved for all. |
 | `VAULT_CYCLES` | `on` | Set `off` to skip vault bookkeeping. |
+| `VAULT_TRADING` | `off` | `on`: buy stock in Vespers at a discount, sell at the open. Needs a swap adapter. |
+| `VAULT_TARGET_BPS` | `2000` | Target inventory, % of NAV (the contract's `maxInventoryBps` caps it too). |
+| `VAULT_MAX_USDG` | unset | Absolute cap on inventory value, e.g. `50` for a first live weekend. |
+| `VAULT_CHUNK_USDG` | `100` | Max USDG per buy. |
+| `VAULT_MIN_EDGE_BPS` | `10` | Buy only this many bps below the mark. |
+| `VAULT_BUY_CUTOFF_MIN` | `60` | No buys this close to the open. |
+| `ALERT_TELEGRAM_BOT_TOKEN` `ALERT_TELEGRAM_CHAT_ID` | unset | Telegram alerts (see `docs/LAUNCH.md` step 6). |
+| `ALERT_DISCORD_WEBHOOK` | unset | Discord alerts. |
+| `ALERT_LEVEL` | `info` | `info`: every transaction plus problems. `warn`: problems only. |
+| `LOW_ETH_ALERT` | `0.002` | Warn when the keeper wallet has less ETH than this. |
 | `DRY_RUN` | `false` | `true`: read and simulate only, send nothing. |
 | `PORT` | unset | If set, serves a JSON health/status endpoint. |
 | `ORACLE` `MARKET` `VAULT` | from `deployments/<CHAIN_ID>.json` | Optional overrides. |

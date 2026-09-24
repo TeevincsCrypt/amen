@@ -58,7 +58,7 @@ export function EligibilityGate() {
           ))}
         </ul>
         <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card-raised p-3 text-sm">
-          <input type="checkbox" className="mt-0.5 accent-[#38CFF2]" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+          <input type="checkbox" className="mt-0.5 accent-primary" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
           <span>I confirm I am not a US person, and I understand the above.</span>
         </label>
         <div className="flex gap-2">

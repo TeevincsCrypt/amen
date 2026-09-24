@@ -6,7 +6,8 @@ import type { RoundPoint } from "@/lib/hooks";
 import { cashSessions, isCashAt } from "@/lib/session";
 import { fmtNy } from "@/lib/format";
 
-const LINE = "#38CFF2";
+// Single-series brand line: a theme token (validated per surface), used through currentColor.
+const LINE = "currentColor";
 const H = 260;
 const PAD = { l: 8, r: 56, t: 16, b: 28 };
 
@@ -83,7 +84,8 @@ export function RoundsChart({ points, now, symbol = "NVDA" }: { points: RoundPoi
   const area = pts.length ? `${d} V${PAD.t + ih} H${X(pts[0].ts).toFixed(1)} Z` : "";
 
   const ticks = niceTicks(y0, y1);
-  const xTicks = [t0 + (t1 - t0) * 0.02, t0 + (t1 - t0) * 0.5, t1];
+  // Three time labels fit from ~520px; a phone gets the two ends only, so they never overlap.
+  const xTicks = w >= 520 ? [t0 + (t1 - t0) * 0.02, t0 + (t1 - t0) * 0.5, t1] : [t0 + (t1 - t0) * 0.02, t1];
 
   const onMove = (clientX: number, rect: DOMRect) => {
     const t = t0 + ((clientX - rect.left - PAD.l) / iw) * (t1 - t0);
@@ -101,7 +103,7 @@ export function RoundsChart({ points, now, symbol = "NVDA" }: { points: RoundPoi
         <svg
           width={w}
           height={H}
-          className="block touch-none outline-none"
+          className="block touch-none text-line outline-none"
           role="img"
           aria-label={`${symbol}/USD Chainlink rounds, ${pts.length} points${pts.length ? `, latest ${usd(pts[pts.length - 1].v)}` : ""}`}
           tabIndex={0}
@@ -139,7 +141,7 @@ export function RoundsChart({ points, now, symbol = "NVDA" }: { points: RoundPoi
             </g>
           ))}
           {xTicks.map((t, i) => (
-            <text key={i} x={X(t)} y={H - 8} textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"} className="fill-muted-foreground font-mono text-[10px]">
+            <text key={i} x={X(t)} y={H - 8} textAnchor={i === 0 ? "start" : i === xTicks.length - 1 ? "end" : "middle"} className="fill-muted-foreground font-mono text-[10px]">
               {fmtNy(Math.round(t)).replace(/,? (EDT|EST)$/, "")}
             </text>
           ))}
@@ -165,7 +167,7 @@ export function RoundsChart({ points, now, symbol = "NVDA" }: { points: RoundPoi
           >
             <p className="font-mono text-sm font-semibold tabular-nums text-foreground">{usd(hp.v)}</p>
             <p className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="inline-block h-0.5 w-3 rounded-full" style={{ background: LINE }} />
+              <span className="inline-block h-0.5 w-3 rounded-full bg-line" />
               Round {hp.roundId.toString()} · {fmtNy(hp.ts)}
             </p>
             <p className="text-[11px] text-muted-foreground">{isCashAt(hp.ts) ? "Printed during cash hours" : "Printed while cash closed"}</p>
@@ -178,10 +180,10 @@ export function RoundsChart({ points, now, symbol = "NVDA" }: { points: RoundPoi
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-2">
-            <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: LINE }} /> {symbol}/USD mark (Chainlink rounds)
+            <span className="inline-block h-0.5 w-4 rounded-full bg-line" /> {symbol}/USD mark (Chainlink rounds)
           </span>
           <span className="inline-flex items-center gap-2">
-            <svg width="14" height="10" aria-hidden>
+            <svg width="14" height="10" className="text-line" aria-hidden>
               <rect width="14" height="10" rx="2" fill="url(#rc-hatch)" />
               <rect width="14" height="10" rx="2" fill={LINE} fillOpacity=".08" />
             </svg>

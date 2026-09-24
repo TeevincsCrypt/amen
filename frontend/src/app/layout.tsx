@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { EligibilityStrip } from "@/components/eligibility";
+import { themeScript } from "@/components/theme-toggle";
 
 export const metadata: Metadata = {
   title: "Amen · the after-hours venue for Robinhood Stock Tokens",
@@ -13,7 +14,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`dark ${GeistSans.variable} ${GeistMono.variable}`}>
+    // data-theme is set before paint by themeScript (saved choice, else the device setting).
+    <html lang="en" data-theme="dark" className={`dark ${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-screen font-sans">
         <Providers>
           <EligibilityStrip />

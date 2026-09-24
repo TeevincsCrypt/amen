@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Amen Protocol keeper: records official closes, creates and resolves NVDA gap markets, keeps vault cycles.",
+  "description": "Amen Protocol keeper: records official closes, creates and resolves gap markets on every listed ticker, runs vault cycles, sends alerts.",
   "scripts": {
     "start": "node src/keeper.mjs",
     "once": "node src/keeper.mjs --once"

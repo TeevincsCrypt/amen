@@ -23,10 +23,11 @@ src/mocks/                MockUSDG (6), MockStockToken (uiMultiplier/balanceOfUI
 script/Deploy.s.sol       DeployLocal (mocks, 31337) · DeployTestnet (mocks, 46630) · DeployMainnet (config/4663.json)
 script/RecordClose.s.sol  record the official NVDA close
 script/check-stock.sh     check a candidate ticker (token + Chainlink feed) before listing it
+script/EnableVaultTrading.s.sol  deploy the vault's Uniswap swap adapter (the Safe then turns trading on)
 script/local-demo.sh      one-command local demo (anvil 31337): full flow + summary, then rewinds for the UI
 test/unit, test/fork      Foundry tests; fork tests auto-skip unless chainid == 4663
 frontend/                 Next.js 14 · wagmi v2 · viem · Tailwind · shadcn-style UI
-keeper/                   keeper bot (records closes, creates/resolves/voids markets, vault cycle books)
+keeper/                   keeper bot (closes, markets, vault cycles and trading, Telegram/Discord alerts)
 ```
 
 ## Tickers
