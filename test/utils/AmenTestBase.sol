@@ -25,6 +25,13 @@ abstract contract AmenTestBase is Test {
     int256 internal constant NVDA_PX_8 = 180_00000000; // $180.00 with 8 decimals
     uint256 internal constant NVDA_PX_18 = 180e18;
 
+    // Freeze reasons (precomputed so vm.prank isn't consumed by a getter call)
+    bytes32 internal constant R_STALE = "STALE";
+    bytes32 internal constant R_PAUSED = "PAUSED";
+    bytes32 internal constant R_NONPOSITIVE = "NONPOSITIVE";
+    bytes32 internal constant R_MANUAL = "MANUAL";
+    bytes32 internal constant R_FEED_ERROR = "FEED_ERROR";
+
     function setUp() public virtual {
         vm.chainId(4663);
         // Thursday 2026-09-24 12:00 UTC (08:00 NY, pre-market, EDT)

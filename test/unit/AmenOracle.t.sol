@@ -176,7 +176,7 @@ contract AmenOracleTest is AmenTestBase {
         vm.warp(block.timestamp + 1);
         IAmenOracle.Mark memory m = oracle.getMark(address(nvda));
         assertTrue(m.frozen);
-        assertEq(m.freezeReason, oracle.STALE());
+        assertEq(m.freezeReason, R_STALE);
     }
 
     function test_Mark_StaleDuringVespersNotFrozen() public {
@@ -191,7 +191,7 @@ contract AmenOracleTest is AmenTestBase {
         vm.warp(utc(2026, 9, 28, 13, 30));
         m = oracle.getMark(address(nvda));
         assertTrue(m.frozen);
-        assertEq(m.freezeReason, oracle.STALE());
+        assertEq(m.freezeReason, R_STALE);
     }
 
     function test_Mark_PausedFreezes() public {
@@ -199,7 +199,7 @@ contract AmenOracleTest is AmenTestBase {
         nvda.setOraclePaused(true);
         IAmenOracle.Mark memory m = oracle.getMark(address(nvda));
         assertTrue(m.frozen);
-        assertEq(m.freezeReason, oracle.PAUSED());
+        assertEq(m.freezeReason, R_PAUSED);
     }
 
     function test_Mark_TokenWithoutPauseSelector() public {
@@ -215,10 +215,10 @@ contract AmenOracleTest is AmenTestBase {
         tick(0);
         IAmenOracle.Mark memory m = oracle.getMark(address(nvda));
         assertTrue(m.frozen);
-        assertEq(m.freezeReason, oracle.NONPOSITIVE());
+        assertEq(m.freezeReason, R_NONPOSITIVE);
         assertEq(m.priceUsd, 0);
         tick(-1);
-        assertEq(oracle.getMark(address(nvda)).freezeReason, oracle.NONPOSITIVE());
+        assertEq(oracle.getMark(address(nvda)).freezeReason, R_NONPOSITIVE);
     }
 
     function test_Mark_FeedRevertFreezes() public {
@@ -226,7 +226,7 @@ contract AmenOracleTest is AmenTestBase {
         feed.setShouldRevert(true);
         IAmenOracle.Mark memory m = oracle.getMark(address(nvda));
         assertTrue(m.frozen);
-        assertEq(m.freezeReason, oracle.FEED_ERROR());
+        assertEq(m.freezeReason, R_FEED_ERROR);
     }
 
     function test_Mark_ManualFreezeHasPriority() public {
@@ -235,7 +235,7 @@ contract AmenOracleTest is AmenTestBase {
         vm.prank(owner);
         oracle.setManualFreeze(true);
         IAmenOracle.Mark memory m = oracle.getMark(address(nvda));
-        assertEq(m.freezeReason, oracle.MANUAL());
+        assertEq(m.freezeReason, R_MANUAL);
         assertFalse(oracle.isVespers());
     }
 
@@ -305,7 +305,7 @@ contract AmenOracleTest is AmenTestBase {
         tickAt(NVDA_PX_8, utc(2026, 9, 25, 19, 55));
         vm.warp(utc(2026, 9, 25, 20, 5));
         nvda.setOraclePaused(true);
-        vm.expectRevert(abi.encodeWithSelector(Errors.OracleFrozen.selector, oracle.PAUSED()));
+        vm.expectRevert(abi.encodeWithSelector(Errors.OracleFrozen.selector, R_PAUSED));
         oracle.recordSessionClose(address(nvda));
     }
 
