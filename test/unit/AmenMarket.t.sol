@@ -67,7 +67,9 @@ contract AmenMarketTest is AmenTestBase {
 
     function test_RevertWhen_CreateWithoutRecordedClose() public {
         vm.prank(keeper);
-        vm.expectRevert(abi.encodeWithSelector(Errors.CloseNotRecorded.selector, address(nvda), day(2026, 9, 24)));
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.CloseNotRecorded.selector, address(nvda), day(2026, 9, 24))
+        );
         market.createGapMarket(address(nvda), day(2026, 9, 24), 100, 0, 1e6);
     }
 
@@ -286,7 +288,9 @@ contract AmenMarketTest is AmenTestBase {
         tick(200_00000000);
         vm.prank(keeper);
         vm.expectRevert(Errors.InvalidParam.selector);
-        market.createAbsMoveMarket(address(nvda), 100, 0, utc(2026, 10, 2, 22, 0), utc(2026, 10, 2, 22, 0), 1e6);
+        market.createAbsMoveMarket(
+            address(nvda), 100, 0, utc(2026, 10, 2, 22, 0), utc(2026, 10, 2, 22, 0), 1e6
+        );
     }
 
     function test_RevertWhen_AbsMoveLiveRefDuringVespers() public {
@@ -324,9 +328,14 @@ contract AmenMarketTest is AmenTestBase {
 
     // ───────────── parimutuel math (fuzz) ─────────────
 
-    function testFuzz_ParimutuelClaimMath(uint256 a, uint256 b, uint256 c, bool aYes, bool bYes, bool yesWinsPx)
-        public
-    {
+    function testFuzz_ParimutuelClaimMath(
+        uint256 a,
+        uint256 b,
+        uint256 c,
+        bool aYes,
+        bool bYes,
+        bool yesWinsPx
+    ) public {
         a = bound(a, 1, 5_000e6);
         b = bound(b, 1, 5_000e6);
         c = bound(c, 1, 5_000e6);

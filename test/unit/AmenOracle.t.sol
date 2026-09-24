@@ -256,7 +256,9 @@ contract AmenOracleTest is AmenTestBase {
         assertEq(m.updatedAt, utc(2026, 9, 25, 19, 55));
         assertEq(oracle.lastRecordedSession(address(nvda)), day(2026, 9, 25));
 
-        vm.expectRevert(abi.encodeWithSelector(Errors.AlreadyRecorded.selector, address(nvda), day(2026, 9, 25)));
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.AlreadyRecorded.selector, address(nvda), day(2026, 9, 25))
+        );
         oracle.recordSessionClose(address(nvda));
     }
 
@@ -273,7 +275,10 @@ contract AmenOracleTest is AmenTestBase {
         vm.warp(utc(2026, 9, 25, 21, 0));
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.RoundOutsideCloseWindow.selector, uint80(2), utc(2026, 9, 25, 20, 30), utc(2026, 9, 25, 20, 0)
+                Errors.RoundOutsideCloseWindow.selector,
+                uint80(2),
+                utc(2026, 9, 25, 20, 30),
+                utc(2026, 9, 25, 20, 0)
             )
         );
         oracle.recordSessionClose(address(nvda));

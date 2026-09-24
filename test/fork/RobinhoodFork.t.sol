@@ -47,7 +47,8 @@ contract RobinhoodForkTest is Test {
         console2.log("NVDA uiMultiplier", m);
         assertGt(m, 0);
         // oraclePaused may not exist; probe via staticcall
-        (bool ok, bytes memory ret) = NVDA.staticcall(abi.encodeWithSelector(IStockToken.oraclePaused.selector));
+        (bool ok, bytes memory ret) =
+            NVDA.staticcall(abi.encodeWithSelector(IStockToken.oraclePaused.selector));
         console2.log("oraclePaused selector exists", ok && ret.length >= 32);
     }
 

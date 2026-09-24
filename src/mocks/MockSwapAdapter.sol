@@ -26,10 +26,13 @@ contract MockSwapAdapter {
         priceWad = p;
     }
 
-    function swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, address recipient)
-        external
-        returns (uint256 amountOut)
-    {
+    function swap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    ) external returns (uint256 amountOut) {
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
         if (tokenIn == usdg && tokenOut == stock) {
             // USDG(6) -> stock(18): out = in * 1e12 * 1e18 / price

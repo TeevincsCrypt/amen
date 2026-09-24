@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark, quiet, liturgical-modern: near-black nave, parchment text, a single gilt accent. */
+@layer base {
+  :root {
+    --background: 30 8% 4.5%;
+    --foreground: 40 25% 88%;
+    --card: 30 7% 6.5%;
+    --card-foreground: 40 25% 88%;
+    --muted: 30 6% 12%;
+    --muted-foreground: 38 8% 55%;
+    --secondary: 30 6% 10%;
+    --secondary-foreground: 40 25% 88%;
+    --primary: 40 42% 62%;
+    --primary-foreground: 30 8% 6%;
+    --destructive: 6 52% 52%;
+    --destructive-foreground: 40 25% 94%;
+    --border: 35 8% 16%;
+    --input: 35 8% 20%;
+    --ring: 40 42% 62%;
+    --gilt: 40 48% 60%;
+    --vespers: 262 30% 70%;
+    --cash: 205 38% 66%;
+    --radius: 0.5rem;
+  }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "tnum" 1;
+    background-image: radial-gradient(ellipse 80% 40% at 50% -10%, hsl(40 40% 50% / 0.06), transparent 70%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: hsl(var(--gilt) / 0.3);
+  }
+}

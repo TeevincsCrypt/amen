@@ -8,3 +8,6 @@ frontend/.next/
 frontend/node_modules/
 frontend/out/
 *.log
+broadcast/*/46630/
+frontend/tsconfig.tsbuildinfo
+frontend/next-env.d.ts

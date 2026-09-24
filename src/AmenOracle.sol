@@ -203,7 +203,9 @@ contract AmenOracle is IAmenOracle, AmenAccess, NetworkGuard {
 
         int256 answer;
         bool feedOk;
-        try IAggregatorV3(feed).latestRoundData() returns (uint80 rid, int256 a, uint256, uint256 upd, uint80) {
+        try IAggregatorV3(feed).latestRoundData() returns (
+            uint80 rid, int256 a, uint256, uint256 upd, uint80
+        ) {
             m.roundId = rid;
             m.updatedAt = upd;
             answer = a;
@@ -247,7 +249,9 @@ contract AmenOracle is IAmenOracle, AmenAccess, NetworkGuard {
     {
         address feed = feedOf[stockToken];
         if (feed == address(0)) revert Errors.UnknownStock(stockToken);
-        try IAggregatorV3(feed).getRoundData(roundId) returns (uint80, int256 a, uint256, uint256 upd, uint80) {
+        try IAggregatorV3(feed).getRoundData(roundId) returns (
+            uint80, int256 a, uint256, uint256 upd, uint80
+        ) {
             if (a > 0 && upd != 0 && upd <= block.timestamp) {
                 return (true, DecimalLib.toWad(uint256(a), feedDecimals[stockToken]), upd);
             }
@@ -341,7 +345,11 @@ contract AmenOracle is IAmenOracle, AmenAccess, NetworkGuard {
         }
     }
 
-    function _roundRaw(address stockToken, uint80 roundId) internal view returns (int256 answer, uint256 upd) {
+    function _roundRaw(address stockToken, uint80 roundId)
+        internal
+        view
+        returns (int256 answer, uint256 upd)
+    {
         try IAggregatorV3(feedOf[stockToken]).getRoundData(roundId) returns (
             uint80, int256 a, uint256, uint256 u, uint80
         ) {

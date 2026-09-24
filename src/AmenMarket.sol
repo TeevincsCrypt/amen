@@ -191,7 +191,15 @@ contract AmenMarket is AmenAccess, ReentrancyGuard, NetworkGuard {
         }
         if (!oracle.isCashOpenAt(resolveEarliestTs)) revert Errors.InvalidParam();
         id = _create(
-            Kind.ABS_MOVE, stockToken, strikeBps, refPx, refTs, sessionId, endTs, resolveEarliestTs, maxNotional
+            Kind.ABS_MOVE,
+            stockToken,
+            strikeBps,
+            refPx,
+            refTs,
+            sessionId,
+            endTs,
+            resolveEarliestTs,
+            maxNotional
         );
     }
 
@@ -345,7 +353,10 @@ contract AmenMarket is AmenAccess, ReentrancyGuard, NetworkGuard {
     {
         bool ok;
         (ok, px, upd) = oracle.getRoundMark(stock, roundId);
-        if (!ok || roundId == 0 || upd < earliest || upd > earliest + RESOLVE_WINDOW || !oracle.isCashOpenAt(upd)) {
+        if (
+            !ok || roundId == 0 || upd < earliest || upd > earliest + RESOLVE_WINDOW
+                || !oracle.isCashOpenAt(upd)
+        ) {
             revert Errors.ResolveRoundInvalid(roundId);
         }
         (bool okPrev,, uint256 updPrev) = oracle.getRoundMark(stock, roundId - 1);
@@ -438,7 +449,10 @@ contract AmenMarket is AmenAccess, ReentrancyGuard, NetworkGuard {
     }
 
     /// @notice Updates fee recipient, taker fee (for future markets) and the per-market notional ceiling.
-    function setFeeParams(address feeRecipient_, uint256 takerFeeBps_, uint256 maxNotionalLimit_) external onlyOwner {
+    function setFeeParams(address feeRecipient_, uint256 takerFeeBps_, uint256 maxNotionalLimit_)
+        external
+        onlyOwner
+    {
         if (feeRecipient_ == address(0)) revert Errors.ZeroAddress();
         if (takerFeeBps_ > MAX_TAKER_FEE_BPS || maxNotionalLimit_ == 0) revert Errors.InvalidParam();
         feeRecipient = feeRecipient_;

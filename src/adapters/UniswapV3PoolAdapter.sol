@@ -44,10 +44,13 @@ contract UniswapV3PoolAdapter is ISwapAdapter {
     }
 
     /// @inheritdoc ISwapAdapter
-    function swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, address recipient)
-        external
-        returns (uint256 amountOut)
-    {
+    function swap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    ) external returns (uint256 amountOut) {
         address pool = factory.getPool(tokenIn, tokenOut, feeTier);
         if (pool == address(0)) revert Errors.InvalidParam();
         if (amountIn == 0 || amountIn > uint256(type(int256).max)) revert Errors.InvalidParam();
@@ -55,13 +58,14 @@ contract UniswapV3PoolAdapter is ISwapAdapter {
 
         bool zeroForOne = tokenIn < tokenOut;
         _activePool = pool;
-        (int256 a0, int256 a1) = IUniswapV3Pool(pool).swap(
-            recipient,
-            zeroForOne,
-            int256(amountIn),
-            zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE,
-            abi.encode(tokenIn)
-        );
+        (int256 a0, int256 a1) = IUniswapV3Pool(pool)
+            .swap(
+                recipient,
+                zeroForOne,
+                int256(amountIn),
+                zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE,
+                abi.encode(tokenIn)
+            );
         _activePool = address(0);
 
         int256 outDelta = zeroForOne ? a1 : a0;

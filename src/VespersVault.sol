@@ -76,7 +76,9 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     event ParamsSet(uint256 maxInventoryBps, uint256 perfFeeBps, uint256 maxDeviationBps, bool allowInKind);
     event SwapAdapterSet(address adapter);
     event FeeRecipientSet(address recipient);
-    event RedeemedInKind(address indexed owner, address indexed receiver, uint256 shares, uint256 usdgOut, uint256 stockOut);
+    event RedeemedInKind(
+        address indexed owner, address indexed receiver, uint256 shares, uint256 usdgOut, uint256 stockOut
+    );
 
     /// @param owner_ Owner (Ownable2Step).
     /// @param usdg_ USDG token, which must have 6 decimals.
@@ -407,11 +409,14 @@ contract VespersVault is ERC4626, AmenAccess, ReentrancyGuard, NetworkGuard {
     /// @param perfFeeBps_ Performance fee on positive cycle PnL (<= 3000).
     /// @param maxDeviationBps_ Max swap price deviation vs the mark (<= 2000).
     /// @param allowInKind_ Enables `redeemInKind`.
-    function setParams(uint256 maxInventoryBps_, uint256 perfFeeBps_, uint256 maxDeviationBps_, bool allowInKind_)
-        external
-        onlyOwner
-    {
-        if (maxInventoryBps_ > BPS || perfFeeBps_ > MAX_PERF_FEE_BPS || maxDeviationBps_ > MAX_DEVIATION_BPS) {
+    function setParams(
+        uint256 maxInventoryBps_,
+        uint256 perfFeeBps_,
+        uint256 maxDeviationBps_,
+        bool allowInKind_
+    ) external onlyOwner {
+        if (maxInventoryBps_ > BPS || perfFeeBps_ > MAX_PERF_FEE_BPS || maxDeviationBps_ > MAX_DEVIATION_BPS)
+        {
             revert Errors.InvalidParam();
         }
         maxInventoryBps = maxInventoryBps_;
