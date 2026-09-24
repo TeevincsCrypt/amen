@@ -10,8 +10,8 @@ export function EligibilityStrip() {
   return (
     <div className="border-b border-border bg-secondary/40 px-4 py-2 text-center text-[11px] leading-relaxed text-muted-foreground">
       <strong className="font-medium text-foreground">Not for US persons.</strong> Stock Tokens are debt securities issued by
-      Robinhood Assets (Jersey) Limited. They give economic exposure only, with no share ownership or voting. Nothing here
-      is investment advice. Amen is not a broker.{" "}
+      Robinhood Assets (Jersey) Limited. <strong className="font-medium text-foreground">They are not shares</strong>: economic
+      exposure only, no ownership, no voting. Nothing here is investment advice. Amen is not a broker.{" "}
       <Link className="underline" href="/risk">
         Risks
       </Link>

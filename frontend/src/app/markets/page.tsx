@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Stat } from "@/components/stat";
 import { TxStatus } from "@/components/tx-status";
 import { NoDeployment } from "@/components/no-deployment";
-import { DemoControls } from "@/components/demo-controls";
 import { bytes32ToString, fmtBps, fmtCountdown, fmtNy, fmtUsd18, fmtUsdg } from "@/lib/format";
 
 type Market = {
@@ -77,7 +76,6 @@ function Markets() {
         </div>
       )}
 
-      <DemoControls />
     </div>
   );
 }

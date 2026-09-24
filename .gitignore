@@ -11,3 +11,4 @@ frontend/out/
 broadcast/*/46630/
 frontend/tsconfig.tsbuildinfo
 frontend/next-env.d.ts
+frontend/public/demo-snapshot.json

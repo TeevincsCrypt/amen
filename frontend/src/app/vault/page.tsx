@@ -12,7 +12,6 @@ import { Stat } from "@/components/stat";
 import { TxStatus } from "@/components/tx-status";
 import { WalletHoldings } from "@/components/wallet-holdings";
 import { NoDeployment } from "@/components/no-deployment";
-import { DemoControls } from "@/components/demo-controls";
 import { fmt18, fmtNy, fmtUsd18, fmtUsdg, fmtBps } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -261,7 +260,6 @@ function Vault() {
         </Card>
       )}
 
-      <DemoControls />
     </div>
   );
 }

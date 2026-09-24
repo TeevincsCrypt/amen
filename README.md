@@ -17,9 +17,9 @@ src/AmenMarket.sol        GAP_CLOSE_TO_OPEN + ABS_MOVE parimutuel books, determi
 src/adapters/             UniswapV3PoolAdapter (exact-input against the canonical pool)
 src/libraries/            DecimalLib, SessionLib, Errors, NetworkGuard
 src/mocks/                MockUSDG (6), MockStockToken (uiMultiplier/balanceOfUI/oraclePaused), MockAggregator
-script/Deploy.s.sol       DeployTestnet (mocks, 46630) · DeployMainnet (config/4663.json, refuses other chains)
+script/Deploy.s.sol       DeployLocal (mocks, 31337) · DeployTestnet (mocks, 46630) · DeployMainnet (config/4663.json)
 script/RecordClose.s.sol  record the official NVDA close
-script/local-demo.sh      one-shot local demo (anvil 46630 at Fri 15:50 NY)
+script/local-demo.sh      one-command local demo (anvil 31337): full flow + summary, then rewinds for the UI
 test/unit, test/fork      Foundry tests; fork tests auto-skip unless chainid == 4663
 frontend/                 Next.js 14 · wagmi v2 · viem · Tailwind · shadcn-style UI
 ```
@@ -34,12 +34,11 @@ forge test --match-path 'test/fork/*' --fork-url $RH_RPC -vv   # live 4663 check
 
 ## Local demo
 ```bash
-./script/local-demo.sh            # starts anvil --chain-id 46630, deploys mocks + core, syncs ABIs
-cd frontend && npm install && npm run dev   # http://localhost:3000
+./script/local-demo.sh                        # anvil 31337 → deploy → full flow → summary → rewind to Fri 16:02 NY
+cd frontend && npm install && npm run dev     # http://localhost:3000 : the same 12 steps as buttons
 ```
-Import anvil accounts #0 (owner/keeper) and #1 into your wallet. The markets and vault pages have
-local-only *demo controls* for warping time and pushing mock Chainlink prints. See the demo script in
-[BUILDATHON.md](docs/BUILDATHON.md).
+The home page runs the flow as anvil dev accounts (owner #0, user1 #1, user2 #2), so no wallet is needed.
+*Rewind to Friday 16:02* replays it. Rerun the script for a fresh chain. Needs Foundry and jq.
 
 ## Fork 4663 locally
 ```bash
@@ -56,5 +55,6 @@ forge script script/Deploy.s.sol:DeployMainnet --rpc-url robinhood --private-key
 The script re-reads `decimals()`, `symbol()`, `uiMultiplier()` and bytecode, and refuses anything but chain 4663.
 Addresses are written to `deployments/4663.json`. Then run `cd frontend && npm run sync`.
 
-`deployments/46630.json` in this repo contains the **deterministic local anvil** addresses (default
-mnemonic). A real testnet deploy overwrites it.
+`deployments/31337.json` holds the deterministic local-anvil addresses (default mnemonic), which are
+also hardcoded in `frontend/src/lib/demo.ts`. Deploy scripts leave the vault's swap adapter unset
+(swaps disabled) except on 31337, unless `ADAPTER_ENABLED=true`.

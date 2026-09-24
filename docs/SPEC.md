@@ -184,8 +184,9 @@ Both market kinds are parimutuel binaries on USDG. **Conservative interpretation
 
 ## 7. Network guard
 
-Every core contract reverts at construction unless `block.chainid ∈ {4663, 46630}`. For local
-demos, anvil runs with `--chain-id 46630`, or you fork 4663.
+Every core contract reverts at construction unless `block.chainid ∈ {4663, 46630, 31337}`. 31337
+is local anvil only (no real funds), used by `script/local-demo.sh`. Deploy scripts leave the vault's
+swap adapter unset on every chain except 31337, unless `ADAPTER_ENABLED=true`.
 
 ## 8. Explicit non-goals
 

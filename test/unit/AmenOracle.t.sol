@@ -29,8 +29,8 @@ contract AmenOracleTest is AmenTestBase {
         vm.chainId(1);
         vm.expectRevert(abi.encodeWithSelector(Errors.WrongChain.selector, uint256(1)));
         new AmenOracle(owner);
-        vm.chainId(31337);
-        vm.expectRevert(abi.encodeWithSelector(Errors.WrongChain.selector, uint256(31337)));
+        vm.chainId(42161); // Arbitrum One
+        vm.expectRevert(abi.encodeWithSelector(Errors.WrongChain.selector, uint256(42161)));
         new AmenOracle(owner);
     }
 
@@ -38,6 +38,8 @@ contract AmenOracleTest is AmenTestBase {
         vm.chainId(4663);
         new AmenOracle(owner);
         vm.chainId(46630);
+        new AmenOracle(owner);
+        vm.chainId(31337); // local anvil demo only
         new AmenOracle(owner);
     }
 

@@ -19,10 +19,10 @@ export const robinhoodTestnet = defineChain({
   testnet: true,
 });
 
-/** Local anvil started with `--chain-id 46630` (see script/local-demo.sh). */
+/** Local anvil (31337) started by script/local-demo.sh. Mocks only, no real funds. */
 export const robinhoodLocal = defineChain({
-  id: 46630,
-  name: "Robinhood Chain (local anvil)",
+  id: 31337,
+  name: "Local anvil (Amen demo)",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: ["http://127.0.0.1:8545"] } },
   testnet: true,

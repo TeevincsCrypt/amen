@@ -30,14 +30,20 @@ export function WalletHoldings() {
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="USDG" value={fmtUsdg(usdg)} unit="USDG · 6 dec" />
-        <Stat label="NVDA raw" value={fmt18(raw, 6)} unit="Stock Token balanceOf · 18 dec" />
-        <Stat
-          label="NVDA share-equivalent"
-          value={ui !== undefined ? fmt18(ui, 6) : "—"}
-          unit="balanceOfUI = raw × uiMultiplier"
-          hint="Economic exposure only, not share ownership"
-        />
-        <Stat label="uiMultiplier" value={fmt18(mult, 6)} unit="ERC-8056 · 18 dec" />
+        {raw !== undefined && raw > 0n ? (
+          <>
+            <Stat label="NVDA raw" value={fmt18(raw, 6)} unit="Stock Token balanceOf · 18 dec" />
+            <Stat
+              label="NVDA share-equivalent"
+              value={ui !== undefined ? fmt18(ui, 6) : "—"}
+              unit="balanceOfUI = raw × uiMultiplier"
+              hint="Economic exposure only, not share ownership"
+            />
+            <Stat label="uiMultiplier" value={fmt18(mult, 6)} unit="ERC-8056 · 18 dec" />
+          </>
+        ) : (
+          <Stat label="NVDA" value="none held" unit="raw and share-equivalent are shown if you hold NVDA" />
+        )}
       </CardContent>
     </Card>
   );

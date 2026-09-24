@@ -10,6 +10,8 @@ import { fmtAge, fmtNy, fmtUsd18 } from "@/lib/format";
 import { activeChain } from "@/lib/chains";
 import { deployment } from "@/lib/contracts";
 import { NoDeployment } from "@/components/no-deployment";
+import { DemoFlow } from "@/components/demo-flow";
+import { isLocal } from "@/lib/chains";
 
 export default function Home() {
   const s = useSession();
@@ -56,6 +58,8 @@ export default function Home() {
           )}
         </Card>
       </section>
+
+      {isLocal && deployment && <DemoFlow />}
 
       <section className="grid gap-6 md:grid-cols-2">
         <Card>

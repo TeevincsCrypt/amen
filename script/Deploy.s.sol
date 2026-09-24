@@ -13,6 +13,7 @@ import {MockUSDG} from "../src/mocks/MockUSDG.sol";
 import {MockStockToken} from "../src/mocks/MockStockToken.sol";
 import {MockAggregator} from "../src/mocks/MockAggregator.sol";
 import {MockSwapAdapter} from "../src/mocks/MockSwapAdapter.sol";
+import {SessionLib} from "../src/libraries/SessionLib.sol";
 
 abstract contract DeployBase is Script {
     struct Core {
@@ -32,11 +33,19 @@ abstract contract DeployBase is Script {
         c.vault = new VespersVault(deployer, usdg, nvda, address(c.oracle), feeRecipient);
         c.market = new AmenMarket(deployer, usdg, address(c.oracle), feeRecipient);
         c.market.setStockAllowed(nvda, true);
+        // Next two NYSE full-day holidays after this build (2026-09-24): Thanksgiving and Christmas.
+        c.oracle.setHoliday(SessionLib.daysFromCivil(2026, 11, 26), true);
+        c.oracle.setHoliday(SessionLib.daysFromCivil(2026, 12, 25), true);
         if (owner != deployer) {
             c.oracle.transferOwnership(owner);
             c.vault.transferOwnership(owner);
             c.market.transferOwnership(owner);
         }
+    }
+
+    /// @dev Inventory swaps stay disabled (no adapter) unless on local anvil or ADAPTER_ENABLED=true.
+    function _adapterEnabled() internal view returns (bool) {
+        return block.chainid == 31337 || vm.envOr("ADAPTER_ENABLED", false);
     }
 
     function _write(Core memory c, address usdg, address nvda, address feed, address adapter) internal {
@@ -89,49 +98,76 @@ contract DeployMainnet is DeployBase {
         address feeRecipient = vm.envOr("FEE_RECIPIENT", owner);
 
         vm.startBroadcast();
-        UniswapV3PoolAdapter adapter = new UniswapV3PoolAdapter(factory, feeTier);
         Core memory c = _deployCore(owner, usdg, nvda, feed, feeRecipient);
-        // Ownable2Step: the deployer stays owner until `owner` accepts, so wiring still works here.
-        c.vault.setSwapAdapter(address(adapter));
+        address adapter;
+        if (_adapterEnabled()) {
+            adapter = address(new UniswapV3PoolAdapter(factory, feeTier));
+            // Ownable2Step: the deployer stays owner until `owner` accepts, so wiring still works here.
+            c.vault.setSwapAdapter(adapter);
+        } else {
+            console2.log("swap adapter NOT set (ADAPTER_ENABLED!=true): vault inventory swaps disabled");
+        }
         vm.stopBroadcast();
 
-        _write(c, usdg, nvda, feed, address(adapter));
+        _write(c, usdg, nvda, feed, adapter);
     }
 }
 
-/// @notice Testnet (46630) / local anvil (`anvil --chain-id 46630`) deploy with mocks that implement
-///         uiMultiplier, balanceOfUI and oraclePaused. Seeds a Friday-close feed round and demo balances.
-/// forge script script/Deploy.s.sol:DeployTestnet --rpc-url local --broadcast
-contract DeployTestnet is DeployBase {
-    function run() external {
-        require(block.chainid == 46630, "DeployTestnet: chainid != 46630");
+/// @notice Mock deploy (mocks implement uiMultiplier, balanceOfUI and oraclePaused). Seeds an NVDA
+///         feed round at block time and demo balances for anvil accounts #0 (owner), #1 and #2.
+abstract contract DeployMocks is DeployBase {
+    address internal constant USER1 = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
+    address internal constant USER2 = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
+
+    function _deployMocks() internal {
         address deployer = msg.sender;
 
         vm.startBroadcast();
         MockUSDG usdg = new MockUSDG();
         MockStockToken nvda = new MockStockToken("NVIDIA Stock Token (mock)", "NVDA");
         MockAggregator feed = new MockAggregator(8, "NVDA / USD (mock)");
-        MockSwapAdapter adapter = new MockSwapAdapter(address(usdg), address(nvda), 180e18);
+        MockSwapAdapter mockVenue = new MockSwapAdapter(address(usdg), address(nvda), 180e18);
 
         // Seed a price so the oracle has a mark. The round is stamped at block time.
         feed.setAnswer(180_00000000);
 
         Core memory c = _deployCore(deployer, address(usdg), address(nvda), address(feed), deployer);
-        c.vault.setSwapAdapter(address(adapter));
+        address adapter;
+        if (_adapterEnabled()) {
+            adapter = address(mockVenue);
+            c.vault.setSwapAdapter(adapter);
+        }
         c.vault.setKeeper(deployer, true);
         c.market.setKeeper(deployer, true);
         c.oracle.setKeeper(deployer, true);
 
-        // Demo balances for anvil accounts 0..2 (the default mnemonic).
-        address[3] memory demo = [
-            deployer, 0x70997970C51812dc3A010C7d01b50e0d17dc79C8, 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
-        ];
+        address[3] memory demo = [deployer, USER1, USER2];
         for (uint256 i; i < demo.length; ++i) {
             usdg.mint(demo[i], 10_000e6);
             nvda.mint(demo[i], 2e18);
         }
         vm.stopBroadcast();
 
-        _write(c, address(usdg), address(nvda), address(feed), address(adapter));
+        // Recorded even when not wired as the adapter, so the demo can move its price alongside the feed.
+        vm.serializeAddress("deployment", "mockVenue", address(mockVenue));
+        _write(c, address(usdg), address(nvda), address(feed), adapter);
+    }
+}
+
+/// @notice Local anvil (31337) deploy used by script/local-demo.sh. Inventory swaps enabled via the mock venue.
+/// forge script script/Deploy.s.sol:DeployLocal --rpc-url local --broadcast
+contract DeployLocal is DeployMocks {
+    function run() external {
+        require(block.chainid == 31337, "DeployLocal: chainid != 31337");
+        _deployMocks();
+    }
+}
+
+/// @notice Robinhood testnet (46630) deploy with mocks. Inventory swaps are disabled unless ADAPTER_ENABLED=true.
+/// forge script script/Deploy.s.sol:DeployTestnet --rpc-url robinhood_testnet --broadcast
+contract DeployTestnet is DeployMocks {
+    function run() external {
+        require(block.chainid == 46630, "DeployTestnet: chainid != 46630");
+        _deployMocks();
     }
 }
