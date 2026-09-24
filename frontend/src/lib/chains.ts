@@ -34,7 +34,16 @@ export const network: AmenNetwork = ((process.env.NEXT_PUBLIC_AMEN_CHAIN as Amen
 
 const base: Chain = network === "mainnet" ? robinhood : network === "testnet" ? robinhoodTestnet : robinhoodLocal;
 
-const rpcOverride = process.env.NEXT_PUBLIC_RPC_URL;
+/** Accepts a bare host ("my-chain.up.railway.app") as well as a full URL; strips a trailing slash. */
+function normalizeRpcUrl(raw: string | undefined): string | undefined {
+  const v = raw?.trim().replace(/\/+$/, "");
+  if (!v) return undefined;
+  if (/^https?:\/\//i.test(v)) return v;
+  const local = /^(localhost|127\.0\.0\.1)(:|$)/i.test(v);
+  return `${local ? "http" : "https"}://${v}`;
+}
+
+const rpcOverride = normalizeRpcUrl(process.env.NEXT_PUBLIC_RPC_URL);
 
 export const activeChain: Chain = rpcOverride
   ? { ...base, rpcUrls: { default: { http: [rpcOverride] } } }
