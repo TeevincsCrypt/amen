@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Stat } from "@/components/stat";
 import { TxStatus } from "@/components/tx-status";
 import { NoDeployment } from "@/components/no-deployment";
-import { isLocal } from "@/lib/chains";
+import { activeChain, isLocal } from "@/lib/chains";
 import Link from "next/link";
 import { bytes32ToString, fmtBps, fmtCountdown, fmtNy, fmtUsd18, fmtUsdg } from "@/lib/format";
 
@@ -51,7 +51,7 @@ export default function MarketsPage() {
 
 function Markets() {
   const d = deployment!;
-  const { data: count } = useReadContract({ address: d.market, abi: amenMarketAbi, functionName: "marketCount", query: { refetchInterval: 4_000 } });
+  const { data: count, isError } = useReadContract({ address: d.market, abi: amenMarketAbi, functionName: "marketCount", query: { refetchInterval: 4_000 } });
   const ids = count ? Array.from({ length: Number(count) }, (_, i) => BigInt(Number(count) - i)) : [];
 
   return (
@@ -68,18 +68,22 @@ function Markets() {
 
       <SessionAdmin />
 
-      {ids.length === 0 ? (
+      {isError && count === undefined ? (
+        <p className="text-sm text-destructive">
+          Can&apos;t reach the Amen chain at <code className="font-mono">{activeChain.rpcUrls.default.http[0]}</code>, so
+          markets can&apos;t be loaded.
+        </p>
+      ) : ids.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No markets yet.
           {isLocal && (
             <>
               {" "}
-              <code className="font-mono">./script/local-demo.sh</code> rewinds the chain to Friday 16:02 New York,
-              before Market #1 exists. Run steps 1–2 on the{" "}
+              The demo chain starts at Friday 16:02 New York, before Market #1 exists. Run steps 1–2 on the{" "}
               <Link href="/" className="underline">
                 home page
               </Link>{" "}
-              (or rerun the script with <code className="font-mono">--no-rewind</code>) and it will appear here.
+              and it will appear here.
             </>
           )}
         </p>

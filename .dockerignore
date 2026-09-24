@@ -1,0 +1,7 @@
+.git
+out
+cache
+broadcast
+frontend
+**/node_modules
+.env

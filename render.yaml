@@ -1,0 +1,10 @@
+# Render Blueprint: hosts the public Amen demo chain (anvil 31337, mocks only, no real funds).
+# Render dashboard → New → Blueprint → select this repo.
+services:
+  - type: web
+    name: amen-demo-chain
+    runtime: docker
+    plan: free
+    dockerfilePath: ./demo-chain/Dockerfile
+    dockerContext: .
+    autoDeploy: true

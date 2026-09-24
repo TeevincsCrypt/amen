@@ -4,6 +4,7 @@ import { Providers } from "@/components/providers";
 import { Nav } from "@/components/nav";
 import { EligibilityGate, EligibilityStrip } from "@/components/eligibility";
 import { FreezeBanner } from "@/components/freeze-banner";
+import { ChainStatus } from "@/components/chain-status";
 
 export const metadata: Metadata = {
   title: "Amen — the after-hours venue for Robinhood Stock Tokens",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen font-sans">
         <Providers>
           <EligibilityStrip />
+          <ChainStatus />
           <FreezeBanner />
           <Nav />
           <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>

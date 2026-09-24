@@ -120,25 +120,26 @@ export function DemoFlow() {
     }
   };
 
-  /** Revert to the Friday-16:02 snapshot the script wrote, then take a fresh snapshot for next time. */
+  /**
+   * Revert to the latest Friday-16:02 snapshot, then take a fresh one for next time.
+   * Only Friday-state snapshots are kept on the demo chain (by the script and by this button),
+   * and each is the newest when taken. A probe snapshot reveals the current id N, so the Friday
+   * snapshot is N−1. Never try an older, unknown id: on anvil a revert to a missing id still
+   * deletes every newer snapshot, which would destroy the Friday state for everyone.
+   */
   const rewind = async () => {
     setBusy("Rewind");
     try {
-      const file = await (await fetch("/demo-snapshot.json", { cache: "no-store" })).json();
-      const key = `amen:demo-snapshot:${file.runId}`;
-      let id: string = file.snapshotId;
-      try {
-        id = localStorage.getItem(key) ?? id;
-      } catch {}
-      const ok = await rpc("evm_revert", [id]);
-      if (!ok) throw new Error("snapshot not found: rerun ./script/local-demo.sh");
+      const probe = BigInt(await rpc("evm_snapshot"));
+      let ok = false;
+      for (let id = probe - 1n; id >= 0n && id >= probe - 8n && !ok; id--) {
+        ok = await rpc("evm_revert", [`0x${id.toString(16)}`]);
+      }
+      if (!ok) throw new Error("no Friday snapshot left on this chain: restart the demo chain");
       const latest = await client!.getBlock();
       await rpc("evm_setNextBlockTimestamp", [Number(latest.timestamp) + 1]);
       await rpc("evm_mine");
-      const next = await rpc("evm_snapshot");
-      try {
-        localStorage.setItem(key, next);
-      } catch {}
+      await rpc("evm_snapshot");
       setLog([{ ok: true, text: "✓ Rewound to Friday 16:02 New York (Vespers)" }]);
     } catch (e) {
       setLog((l) => [{ ok: false, text: `✗ Rewind: ${decodeError(e)}` }, ...l]);

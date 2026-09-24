@@ -40,6 +40,24 @@ cd frontend && npm install && npm run dev     # http://localhost:3000 : the same
 The home page runs the flow as anvil dev accounts (owner #0, user1 #1, user2 #2), so no wallet is needed.
 *Rewind to Friday 16:02* replays it. Rerun the script for a fresh chain. Needs Foundry and jq.
 
+## Hosted demo (Vercel + Render)
+The website runs on Vercel, but Vercel can't run a blockchain. The demo chain (anvil 31337, mocks
+only, no real funds) runs as a small Docker service on Render, and the site points at it.
+
+1. **Demo chain on Render:** Render dashboard → **New → Blueprint** → pick this repo. It reads
+   `render.yaml` and builds `demo-chain/Dockerfile`, which runs `./script/local-demo.sh --serve`:
+   deploy, full scripted flow, then rewind to Friday 16:02 New York. Copy the service URL, e.g.
+   `https://amen-demo-chain.onrender.com`.
+2. **Site on Vercel:** Project → Settings → **Root Directory = `frontend`** (Framework: Next.js).
+   Settings → **Environment Variables**: `NEXT_PUBLIC_RPC_URL = <the Render URL>` for Production
+   and Preview. Leave `NEXT_PUBLIC_AMEN_CHAIN` unset (demo chain 31337). **Redeploy**; the
+   variable is baked in at build time.
+
+The Render free plan sleeps after about 15 minutes idle. The first visit after that takes about a
+minute while it restarts, and a restart resets the chain to Friday 16:02. The chain is public and
+shared: anyone can click the demo steps, and *Rewind to Friday 16:02* resets it for everyone. If
+the site can't reach the chain, a red banner names the URL it's trying.
+
 ## Fork 4663 locally
 ```bash
 anvil --fork-url $RH_RPC            # chain id 4663

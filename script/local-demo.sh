@@ -4,6 +4,10 @@
 #   ./script/local-demo.sh             full scripted flow + summary, then rewinds the chain to
 #                                      Friday 16:01 NY so the same flow can be clicked in the UI
 #   ./script/local-demo.sh --no-rewind leave the chain in the final (Monday) state
+#   ./script/local-demo.sh --serve     same as the default, then stay in the foreground serving
+#                                      the chain (used by demo-chain/Dockerfile for hosting)
+#
+# Env: ANVIL_HOST (default 127.0.0.1; 0.0.0.0 to expose), ANVIL_PORT (default 8545).
 #
 # Flow: start anvil → deploy → seed owner/user1/user2 (ETH + USDG) → warp to Fri 16:01 NY (Vespers)
 #       → record official close → owner creates NVDA 1% gap market → user1 YES 100, user2 NO 300
@@ -14,9 +18,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 REWIND=1
-[[ "${1:-}" == "--no-rewind" ]] && REWIND=0
+SERVE=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-rewind) REWIND=0 ;;
+    --serve) SERVE=1 ;;
+    *) echo "unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
 
-RPC=http://127.0.0.1:8545
+ANVIL_HOST=${ANVIL_HOST:-127.0.0.1}
+ANVIL_PORT=${ANVIL_PORT:-8545}
+RPC=http://127.0.0.1:$ANVIL_PORT
 # Well-known anvil dev keys (default mnemonic). Local only, never use anywhere else.
 PK_OWNER=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 PK_USER1=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
@@ -48,7 +61,8 @@ if alive; then
   die "something else is already listening on $RPC; stop it first"
 fi
 say "starting anvil (chain id 31337, clock = Fri 15:50 New York)"
-nohup anvil --chain-id 31337 --timestamp "$T_DEPLOY" >"$LOG_DIR/amen-anvil.log" 2>&1 &
+nohup anvil --chain-id 31337 --timestamp "$T_DEPLOY" --host "$ANVIL_HOST" --port "$ANVIL_PORT" \
+  >"$LOG_DIR/amen-anvil.log" 2>&1 &
 echo $! >"$PIDFILE"
 for _ in $(seq 1 30); do alive && break; sleep 1; done
 [[ "$(cast chain-id --rpc-url "$RPC")" == "31337" ]] || die "anvil did not start (see $LOG_DIR/amen-anvil.log)"
@@ -162,3 +176,11 @@ fi
 echo
 echo "UI:  cd frontend && npm install && npm run dev   →  http://localhost:3000"
 echo "anvil keeps running (pid $(cat "$PIDFILE")); rerun this script for a fresh chain."
+
+if [[ $SERVE == 1 ]]; then
+  echo "serving the demo chain on $ANVIL_HOST:$ANVIL_PORT (Ctrl-C to stop)"
+  tail -n +1 -f "$LOG_DIR/amen-anvil.log" &
+  while kill -0 "$(cat "$PIDFILE")" 2>/dev/null; do sleep 5; done
+  echo "anvil exited" >&2
+  exit 1
+fi
