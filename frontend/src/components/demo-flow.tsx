@@ -3,32 +3,18 @@
 import { useCallback, useState } from "react";
 import { useBlock, usePublicClient, useReadContracts } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
-import { createWalletClient, http, maxUint256, type Abi, type Address } from "viem";
-import { activeChain } from "@/lib/chains";
-import { amenMarketAbi, amenOracleAbi, mockAggregatorAbi, mockSwapAdapterAbi, stockTokenAbi, usdgAbi, vespersVaultAbi } from "@/lib/contracts";
+import { maxUint256, type Address } from "viem";
+import { amenMarketAbi, amenOracleAbi, mockAggregatorAbi, stockTokenAbi, usdgAbi, vespersVaultAbi } from "@/lib/contracts";
 import { ACCOUNTS, DEMO, MARKET_ID, SESSION_ID, T } from "@/lib/demo";
 import { decodeError } from "@/lib/errors";
+import { demoRewind, demoRpc, demoSend, PRINT_182, type DemoCall, type Who } from "@/lib/demo-actions";
 import { fmt18, fmtNy, fmtUsd18, fmtUsdg } from "@/lib/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, Play, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Who = keyof typeof ACCOUNTS;
-type Call = { address: Address; abi: Abi | readonly unknown[]; functionName: string; args?: readonly unknown[] };
-
-const wallet = createWalletClient({ chain: activeChain, transport: http(activeChain.rpcUrls.default.http[0]) });
-
-async function rpc(method: string, params: unknown[] = []) {
-  const res = await fetch(activeChain.rpcUrls.default.http[0], {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
-  });
-  const j = await res.json();
-  if (j.error) throw new Error(j.error.message);
-  return j.result;
-}
+type Call = DemoCall;
 
 type Market = { yesPool: bigint; noPool: bigint; resolved: boolean; yesWins: boolean; voided: boolean; resolvePrice: bigint; resolveMarkTs: bigint; moveBps: bigint; takerFeeBps: bigint };
 type Pos = { yes: bigint; no: bigint; claimed: boolean };
@@ -90,11 +76,7 @@ export function DemoFlow() {
     async (label: string, who: Who, calls: Call[]) => {
       setBusy(label);
       try {
-        for (const c of calls) {
-          const hash = await wallet.writeContract({ ...(c as object), account: ACCOUNTS[who], chain: activeChain } as never);
-          const rc = await client!.waitForTransactionReceipt({ hash });
-          if (rc.status !== "success") throw new Error(`${c.functionName} reverted`);
-        }
+        await demoSend(client!, who, calls);
         setLog((l) => [{ ok: true, text: `✓ ${label}` }, ...l].slice(0, 6));
       } catch (e) {
         setLog((l) => [{ ok: false, text: `✗ ${label}: ${decodeError(e)}` }, ...l].slice(0, 6));
@@ -109,8 +91,8 @@ export function DemoFlow() {
   const warp = async (label: string, ts: number) => {
     setBusy(label);
     try {
-      await rpc("evm_setNextBlockTimestamp", [ts]);
-      await rpc("evm_mine");
+      await demoRpc("evm_setNextBlockTimestamp", [ts]);
+      await demoRpc("evm_mine");
       setLog((l) => [{ ok: true, text: `✓ ${label}` }, ...l].slice(0, 6));
     } catch (e) {
       setLog((l) => [{ ok: false, text: `✗ ${label}: ${decodeError(e)}` }, ...l].slice(0, 6));
@@ -120,26 +102,10 @@ export function DemoFlow() {
     }
   };
 
-  /**
-   * Revert to the latest Friday-16:02 snapshot, then take a fresh one for next time.
-   * Only Friday-state snapshots are kept on the demo chain (by the script and by this button),
-   * and each is the newest when taken. A probe snapshot reveals the current id N, so the Friday
-   * snapshot is N−1. Never try an older, unknown id: on anvil a revert to a missing id still
-   * deletes every newer snapshot, which would destroy the Friday state for everyone.
-   */
   const rewind = async () => {
     setBusy("Rewind");
     try {
-      const probe = BigInt(await rpc("evm_snapshot"));
-      let ok = false;
-      for (let id = probe - 1n; id >= 0n && id >= probe - 8n && !ok; id--) {
-        ok = await rpc("evm_revert", [`0x${id.toString(16)}`]);
-      }
-      if (!ok) throw new Error("no Friday snapshot left on this chain: restart the demo chain");
-      const latest = await client!.getBlock();
-      await rpc("evm_setNextBlockTimestamp", [Number(latest.timestamp) + 1]);
-      await rpc("evm_mine");
-      await rpc("evm_snapshot");
+      await demoRewind(client!);
       setLog([{ ok: true, text: "✓ Rewound to Friday 16:02 New York (Vespers)" }]);
     } catch (e) {
       setLog((l) => [{ ok: false, text: `✗ Rewind: ${decodeError(e)}` }, ...l]);
@@ -194,10 +160,7 @@ export function DemoFlow() {
       n: 8, who: "feed", title: "Mock feed prints $182.00 (YES)", detail: "+1.11% vs the $180 close. The mock swap venue moves with it.",
       done: printed,
       action: () =>
-        send("Print $182.00", "owner", [
-          { address: DEMO.nvdaFeed, abi: mockAggregatorAbi, functionName: "setAnswer", args: [18_200_000_000n] },
-          { address: DEMO.mockVenue, abi: mockSwapAdapterAbi, functionName: "setPrice", args: [182n * 10n ** 18n] },
-        ]),
+        send("Print $182.00", "owner", PRINT_182),
     },
     {
       n: 9, who: "anyone", title: "Resolve", detail: "Uses the first cash-session print at or after 09:30, proven by round id.",
