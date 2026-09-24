@@ -48,6 +48,11 @@ only, no real funds) runs as a small Docker service on Render, and the site poin
    `render.yaml` and builds `demo-chain/Dockerfile`, which runs `./script/local-demo.sh --serve`:
    deploy, full scripted flow, then rewind to Friday 16:02 New York. Copy the service URL, e.g.
    `https://amen-demo-chain.onrender.com`.
+
+   **Or on Railway:** New Project → **Deploy from GitHub repo** → pick this repo. `railway.json`
+   points it at `demo-chain/Dockerfile`. In the service: **Variables** → add `PORT = 8545`, then
+   **Settings → Networking → Generate Domain** with target port **8545**. Copy the
+   `https://….up.railway.app` URL.
 2. **Site on Vercel:** Project → Settings → **Root Directory = `frontend`** (Framework: Next.js).
    Settings → **Environment Variables**: `NEXT_PUBLIC_RPC_URL = <the Render URL>` for Production
    and Preview. Leave `NEXT_PUBLIC_AMEN_CHAIN` unset (demo chain 31337). **Redeploy**; the
