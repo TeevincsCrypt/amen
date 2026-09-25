@@ -1,4 +1,19 @@
 {
+  "4663": {
+    "chainId": 4663,
+    "deployedAtBlock": 26056762,
+    "keeper": "0xd78ce3a24Ddda7130F849446AbD1f1f77Dec5abE",
+    "market": "0x7509Fd7957deDe1969F81c920D0bB6Cc0d02edee",
+    "maxNotionalPerMarket": 2000000000,
+    "nvda": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "nvdaFeed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+    "oracle": "0x23a28D898BabcAb626020cF475D852463361C2a6",
+    "owner": "0x5F6E4ac6f7bCeDa528e2A810624Fc54837a64c25",
+    "swapAdapter": "0x0000000000000000000000000000000000000000",
+    "usdg": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "vault": "0x1454a47D2159D7822Eb35921F0f32c77615aAD2E",
+    "vaultDepositCap": 10000000000
+  },
   "31337": {
     "chainId": 31337,
     "deployedAtBlock": 0,
