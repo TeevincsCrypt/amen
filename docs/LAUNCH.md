@@ -54,7 +54,8 @@ else should ever see a private key.
 ```bash
 git pull && git submodule update --init --recursive
 export OWNER=0xYourSafe KEEPER=0xYourKeeperWallet
-forge script script/Deploy.s.sol:DeployMainnet --rpc-url robinhood -vv
+forge script script/Deploy.s.sol:DeployMainnet --rpc-url robinhood \
+  --account deployer --sender 0xYourDeployerAddress -vv
 rm deployments/4663.json   # the dry run writes simulated addresses; don't keep them
 ```
 
@@ -66,11 +67,11 @@ It must print `vault deposit cap … 10000000000`, `max notional … 2000000000`
 
 ```bash
 forge script script/Deploy.s.sol:DeployMainnet --rpc-url robinhood --broadcast \
-  --ledger \
+  --account deployer --sender 0xYourDeployerAddress \
   --verify --verifier blockscout --verifier-url https://robinhoodchain.blockscout.com/api/
 ```
 
-(Use `--account <keystore>` or `--private-key` instead of `--ledger` if needed.) The script
+(`--sender` must be the deployer wallet's address: the script uses it as the temporary owner until the Safe accepts. With a Ledger, use `--ledger --sender <ledger address>` instead of `--account`.) The script
 checks every setting after deploying and writes `deployments/4663.json`.
 
 ## 4. Hand ownership to the Safe
