@@ -297,12 +297,8 @@ async function recordCloseFor(stock, symbol, sid, closeTs) {
     return;
   }
   if (r.upd + CLOSE_LOOKBACK < closeTs) {
-    log("WARN", `${symbol}: record close: last round before the bell is older than 30 min; not recording automatically. The owner (Safe) or keeper may forceRecordSessionClose if appropriate.`, {
-      sessionId: sid,
-      roundId: r.rid,
-      updatedAt: r.upd,
-      closeTs,
-    });
+    // Once per session, not every tick: the same stale round stays stale all weekend.
+    note(`stale-close-${stock}`, "WARN", `${symbol}: record close: last round before the bell (${r.rid}, ${Math.round(Number(closeTs - r.upd) / 60)} min before it) is older than 30 min; no ${symbol} market this session unless the owner (Safe) calls forceRecordSessionClose(${stock}, ${sid}, ${r.rid}).`);
     return;
   }
   if (r.rid === latest) await write(`${symbol}: record close (session ${sid}, latest round ${r.rid})`, D.oracle, oracleAbi, "recordSessionClose", [stock]);
