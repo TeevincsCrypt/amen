@@ -1,7 +1,9 @@
-# Public Amen demo chain: anvil (chain id 31337, mocks only, no real funds) running the same
-# scripted setup as ./script/local-demo.sh, rewound to Friday 16:02 New York.
-# The hosted frontend points at it via NEXT_PUBLIC_RPC_URL. Build context = repo root.
-FROM debian:bookworm-slim
+# One image, two Railway services (build context = repo root):
+#   default           public Amen demo chain: anvil (chain id 31337, mocks only, no real funds)
+#                     running ./script/local-demo.sh, rewound to Friday 16:02 New York.
+#   AMEN_SERVICE=keeper  the mainnet keeper bot (keeper/src/keeper.mjs), configured by its env vars.
+# Railway applies the root railway.json to every service from this repo, so the variable picks the role.
+FROM node:22-bookworm-slim
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash ca-certificates curl git jq tzdata procps \
@@ -25,6 +27,9 @@ RUN if [ ! -f lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol ]; then
 # Compile at build time so startup only deploys.
 RUN forge build
 
+# Keeper dependencies (only used when AMEN_SERVICE=keeper).
+RUN cd keeper && npm ci --omit=dev
+
 ENV ANVIL_HOST=0.0.0.0 TZ=UTC
 # Render/Railway/Fly inject PORT; default 8545.
-CMD ["bash", "-c", "ANVIL_PORT=${PORT:-8545} exec ./script/local-demo.sh --serve"]
+CMD ["bash", "-c", "if [ \"$AMEN_SERVICE\" = keeper ]; then cd keeper && exec node src/keeper.mjs; else ANVIL_PORT=${PORT:-8545} exec ./script/local-demo.sh --serve; fi"]

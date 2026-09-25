@@ -93,9 +93,10 @@ git commit -m "Mainnet guarded-beta deployment" && git push
 ## 6. Keeper bot on Railway
 
 1. Railway → your project → **New → GitHub Repo** → `TeevincsCrypt/amen` (a second service).
-2. Service **Settings → Config-as-code file path**: `keeper/railway.json`. Otherwise it would
-   build the demo chain from the root `railway.json`.
+2. The repo's image runs the demo chain by default. The variable `AMEN_SERVICE=keeper` (below)
+   makes this service run the keeper instead. No config-file setting needed.
 3. **Variables**:
+   - `AMEN_SERVICE` = `keeper`
    - `KEEPER_PRIVATE_KEY` = the keeper wallet's key
    - `CHAIN_ID` = `4663`
    - `MARKET_SCHEDULE` = `weekend`
