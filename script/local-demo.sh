@@ -201,7 +201,9 @@ echo "anvil keeps running (pid $(cat "$PIDFILE")); rerun this script for a fresh
 
 if [[ $SERVE == 1 ]]; then
   echo "serving the demo chain on $ANVIL_HOST:$ANVIL_PORT (Ctrl-C to stop)"
-  tail -n +1 -f "$LOG_DIR/amen-anvil.log" &
+  # anvil logs every RPC call; hosts like Railway cap log volume, so only a heartbeat is printed.
+  # The full log stays in $LOG_DIR/amen-anvil.log.
+  ( while sleep 600; do echo "demo chain alive: block $(cast block-number --rpc-url "$RPC" 2>/dev/null || echo '?')"; done ) &
   while kill -0 "$(cat "$PIDFILE")" 2>/dev/null; do sleep 5; done
   echo "anvil exited" >&2
   exit 1
