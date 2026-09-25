@@ -48,7 +48,7 @@ keeper rights and a little ETH for gas. It can't set prices or move user funds.
 | `ALERT_TELEGRAM_BOT_TOKEN` `ALERT_TELEGRAM_CHAT_ID` | unset | Telegram alerts (see `docs/LAUNCH.md` step 6). |
 | `ALERT_DISCORD_WEBHOOK` | unset | Discord alerts. |
 | `ALERT_LEVEL` | `info` | `info`: every transaction plus problems. `warn`: problems only. |
-| `LOW_ETH_ALERT` | `0.002` | Warn when the keeper wallet has less ETH than this. |
+| `LOW_ETH_ALERT` | `0.0002` | Warn when the keeper wallet has less ETH than this. |
 | `DRY_RUN` | `false` | `true`: read and simulate only, send nothing. |
 | `PORT` | unset | If set, serves a JSON health/status endpoint. |
 | `ORACLE` `MARKET` `VAULT` | from `deployments/<CHAIN_ID>.json` | Optional overrides. |

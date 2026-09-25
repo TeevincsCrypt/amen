@@ -113,7 +113,7 @@ git commit -m "Mainnet guarded-beta deployment" && git push
    you get a "Keeper started" message. Remove `DRY_RUN` to go live.
 
 You're alerted on: warnings (a market about to void, a missing close), errors, the keeper
-wallet dropping below 0.002 ETH (`LOW_ETH_ALERT`), and, at `info`, every transaction. An alert
+wallet dropping below 0.0002 ETH (`LOW_ETH_ALERT`), and, at `info`, every transaction. An alert
 can't tell you the keeper has stopped entirely: for that, set `PORT` = `8080`, give the service a
 Railway domain, and point a free uptime monitor (UptimeRobot, Better Stack) at it.
 

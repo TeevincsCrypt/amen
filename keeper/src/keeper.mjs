@@ -55,7 +55,7 @@ const ALERT_TELEGRAM_BOT_TOKEN = env("ALERT_TELEGRAM_BOT_TOKEN", "");
 const ALERT_TELEGRAM_CHAT_ID = env("ALERT_TELEGRAM_CHAT_ID", "");
 const ALERT_LEVEL = env("ALERT_LEVEL", "info"); // info | warn
 const ALERT_REPEAT_MIN = Number(env("ALERT_REPEAT_MIN", "360")); // same alert at most every 6 h
-const LOW_ETH_ALERT = parseEther(env("LOW_ETH_ALERT", "0.002"));
+const LOW_ETH_ALERT = parseEther(env("LOW_ETH_ALERT", "0.0002"));
 
 const here = dirname(fileURLToPath(import.meta.url));
 function loadDeployment() {
